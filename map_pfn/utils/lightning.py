@@ -104,7 +104,10 @@ class Checkpointer(Checkpoint):
 
     @override
     def teardown(self, trainer: Trainer, *_: Any, **__: Any) -> None:
-        trainer.strategy.remove_checkpoint(self.ckpt_path)
+        # Keep the final checkpoint on disk: it is needed downstream (resume,
+        # fine-tuning via cfg.load_checkpoint, post-hoc eval). The upstream
+        # behaviour removed it after every stage, leaving no usable artifact.
+        return
 
 
 class JaxTrainer(Trainer):
