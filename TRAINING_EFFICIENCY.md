@@ -51,12 +51,35 @@ All on the subset proxy, num_samples=100, WSD schedule (warmup 0.02 / decay 0.3)
 steps) and ~2× better real-data zero-shot AUPRC. 5e-3 is noisier/no better; 1e-3 is slow.
 (Contradicts the earlier LinearSCM "1e-3≈3e-4" note — different scale/task.) **Adopt 3e-3.**
 
-### Muon (blocked)
-`optax.contrib.muon` is incompatible with equinox's `None`-filtered param tree
-(`ValueError: Expected None, got 4` in its internal ndim-routing mask) and with
-`optax.MultiSteps` (fixed by skipping MultiSteps at accum=1). Using Muon needs a custom
-Newton-Schulz / `multi_transform` integration that partitions matrix vs non-matrix params
-with a label tree matching the filtered structure. **TODO.**
+### Muon (implemented, not adopted)
+`optax.contrib.muon` is incompatible with equinox's `None`-filtered param tree, so
+`map_pfn/train/muon.py` implements `muon_adamw`: Newton-Schulz orthogonalized momentum for
+2-D weight matrices, AdamW for everything else (norms/biases/embeddings), routed per-leaf via
+`jax.tree.map`. Enable with `cfg.module.optimizer_name=muon`.
+
+| run (800 steps) | loss@400 | prior_W2@800 | **real test AUPRC** | test W2 |
+|---|---|---|---|---|
+| AdamW@3e-3 | 1.37 | 70.0 | **0.051** | 147 |
+| Muon@3e-3 | 1.36 | 71.8 | 0.022 | 150 |
+| Muon@1e-2 | **1.24** | **65.0** | 0.022 | **131** |
+
+Muon needs a higher LR (~1e-2; orthogonalized updates are smaller per element). It then
+converges faster early and is better on the *synthetic-prior* distribution metrics (W₂), **but
+both Muon runs give worse real-data test AUPRC than AdamW** — it optimizes the FM-loss proxy
+without improving DEG identification. **Not adopted.** LR was the real lever.
+
+### Measurement caveat (important)
+At ≤800 steps on the subset, real-data Frangieh test AUPRC sits near its noise floor
+(~0.02–0.05; the Frangieh test split is tiny). Method ranking by AUPRC there is unreliable, and
+cross-session numbers differ (env-version sensitivity). Distributional metrics (W₂/MMD/AUPRC)
+are also not comparable across different `num_samples`, so we hold `num_samples=100` fixed and
+treat synthetic-prior `val/loss` + `W₂` as the fast proxy — but the **metric that decides** is
+real-data AUPRC from a longer, full-prior run.
+
+### Meaningful validation (running)
+`exp_fullsergio_lr3e3`: full SERGIO prior (6000 contexts, vs the 400-context proxy) + LR=3e-3 +
+small model, 10k steps (~40× less compute than the paper's 400k). Goal: does real-data Frangieh
+AUPRC climb toward the paper's 0.34, or plateau (capacity/step limited)? Result pending.
 
 ## Remaining directions (not yet done)
 - Muon via custom integration (potentially stacks with LR=3e-3).
