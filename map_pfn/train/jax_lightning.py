@@ -32,6 +32,7 @@ class JaxLightningModule(LightningModule):
         step_size: float = 0.01,
         guidance: float = 2.0,
         ema_decay: float = 0.999,
+        eval_solver: str = "dopri5",
         *,
         key: PRNGKeyArray,
     ) -> None:
@@ -63,6 +64,7 @@ class JaxLightningModule(LightningModule):
         self.gradient_clipping = gradient_clipping
         self.step_size = step_size
         self.guidance = guidance
+        self.eval_solver = eval_solver
         self.optimizer = None
         self.opt_state = None
         self.ema_decay = ema_decay
@@ -125,6 +127,7 @@ class JaxLightningModule(LightningModule):
                 treatment=treatment,
                 guidance=self.guidance,
                 step_size=self.step_size,
+                solver_name=self.eval_solver,
                 key=sample_key,
             )
 
@@ -184,6 +187,7 @@ class JaxLightningModule(LightningModule):
             treatment=treatment,
             guidance=self.guidance,
             step_size=self.step_size,
+            solver_name=self.eval_solver,
             key=sample_key,
         )
 

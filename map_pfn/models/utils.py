@@ -1,4 +1,5 @@
 import math
+import os
 from functools import partial
 
 import diffrax
@@ -7,6 +8,11 @@ import jax
 import jax.numpy as jnp
 import jax.random as jr
 from jaxtyping import Array, Float, PRNGKeyArray
+
+# Attention backend. "cudnn" is fastest but flakily fails with
+# "No valid engine configs" for some shapes on this cluster; "xla" is a robust
+# pure-XLA fallback (default). Override via MAPPFN_ATTN_IMPL=cudnn.
+_ATTN_IMPL = os.environ.get("MAPPFN_ATTN_IMPL", "xla")
 
 
 class MLP(eqx.Module):
@@ -68,13 +74,50 @@ class SinusoidalPosEmb(eqx.Module):
 _HAS_GPU = any(d.platform == "gpu" for d in jax.devices())
 
 
+_ATTN_CHUNK = int(os.environ.get("MAPPFN_ATTN_CHUNK", "256"))
+
+
+def _chunked_attention(
+    q: Float[Array, " seq_len num_heads head_dim"],
+    k: Float[Array, " seq_len num_heads head_dim"],
+    v: Float[Array, " seq_len num_heads head_dim"],
+    chunk: int = _ATTN_CHUNK,
+) -> Float[Array, " seq_len num_heads head_dim"]:
+    """Exact attention, memory-bounded by chunking over the query axis.
+
+    Softmax is over keys and independent per query, so query-chunking is exact.
+    Peak memory is O(chunk * seq_len * num_heads) instead of O(seq_len^2 *
+    num_heads), and the per-chunk attention matrix is rematerialized in the
+    backward pass. Pure XLA, so robust on any device (no cuDNN dependency).
+    """
+    seq_len, num_heads, head_dim = q.shape
+    scale = 1.0 / jnp.sqrt(jnp.asarray(head_dim, dtype=q.dtype))
+
+    @jax.checkpoint
+    def attend(q_chunk: Float[Array, " chunk num_heads head_dim"]) -> Float[Array, " chunk num_heads head_dim"]:
+        logits = jnp.einsum("chd,khd->hck", q_chunk, k) * scale
+        weights = jax.nn.softmax(logits, axis=-1)
+        return jnp.einsum("hck,khd->chd", weights, v)
+
+    pad = (-seq_len) % chunk
+    q_pad = jnp.pad(q, ((0, pad), (0, 0), (0, 0)))
+    q_pad = q_pad.reshape(-1, chunk, num_heads, head_dim)
+    out = jax.lax.map(attend, q_pad)
+    out = out.reshape(-1, num_heads, head_dim)[:seq_len]
+    return out
+
+
 def flash_attention(
     q: Float[Array, " seq_len num_heads head_dim"],
     k: Float[Array, " seq_len num_heads head_dim"],
     v: Float[Array, " seq_len num_heads head_dim"],
     pad_multiple: int = 64,
 ) -> Float[Array, " seq_len num_heads head_dim"]:
-    """Attention with cuDNN backend, handling padding and dtype conversion.
+    """Multi-head attention.
+
+    Defaults to a memory-bounded pure-XLA chunked implementation that is robust
+    on any device. Set ``MAPPFN_ATTN_IMPL=cudnn`` to use the (faster but, on
+    some nodes, compile-flaky) cuDNN flash-attention kernel instead.
 
     Args:
         q: Query tensor of shape (seq_len, num_heads, head_dim).
@@ -88,12 +131,8 @@ def flash_attention(
     orig_dtype = q.dtype
     seq_len = q.shape[0]
 
-    if not _HAS_GPU:
-        scale = 1.0 / jnp.sqrt(jnp.asarray(q.shape[-1], dtype=q.dtype))
-        attn_logits = jnp.einsum("shd,thd->hst", q, k) * scale
-        attn_weights = jax.nn.softmax(attn_logits, axis=-1)
-        out = jnp.einsum("hst,thd->shd", attn_weights, v)
-        return out.astype(orig_dtype)
+    if _ATTN_IMPL != "cudnn" or not _HAS_GPU:
+        return _chunked_attention(q, k, v).astype(orig_dtype)
 
     pad_len = (pad_multiple - seq_len % pad_multiple) % pad_multiple
 
@@ -136,6 +175,7 @@ def solve_ode(
     guidance: float,
     step_size: float,
     time_grid: Float[Array, " time_steps"] | None = None,
+    solver_name: str = "dopri5",
     *,
     key: PRNGKeyArray,
 ) -> Float[Array, "time_steps batch_size ..."] | Float[Array, "batch_size ..."]:
@@ -148,13 +188,16 @@ def solve_ode(
         int_data: Interventional data to pass to the model.
         treatment: Treatment to apply.
         guidance: Classifier-free guidance weight.
-        step_size: Initial step size.
+        step_size: Initial/fixed step size (fixed dt for euler).
         time_grid: Time points for integration. If none, the last time will be returned.
+        solver_name: ODE solver, "dopri5" (adaptive, accurate) or "euler" (fixed-step, cheap
+            to compile -- useful for fast validation monitoring).
         key: Random key.
 
     Returns:
         Final points or full trajectory depending on return_intermediates.
     """
+    solver = diffrax.Euler() if solver_name == "euler" else diffrax.Dopri5()
     x_init = jr.normal(key, noise_shape)
     in_axes = (0, 0, None if int_data is None else 0, 0)
 
@@ -171,7 +214,7 @@ def solve_ode(
 
     solution = diffrax.diffeqsolve(
         terms=diffrax.ODETerm(vector_field),
-        solver=diffrax.Dopri5(),
+        solver=solver,
         t0=0.0,
         t1=1.0,
         dt0=step_size,

@@ -47,6 +47,23 @@ Zero-shot Frangieh metrics over training (val split, same Dopri5 ODE eval used f
   **but DEG AUPRC declines** (0.116 → 0.076). The model specializes to SERGIO statistics that do not
   zero-shot-transfer to real-melanoma differential-expression ranking at this step count.
 
+### Important caveat: our model is also ~8× smaller than the paper's
+
+The gap above reflects **two** differences from the paper at once, not just step count:
+
+| | embed_dim | cond_dim | blocks | heads | reg tokens | params (d=50) |
+|---|---|---|---|---|---|---|
+| **Ours** | 128 | 128 | 4 | 4 | 4 | 3.36M |
+| **Paper default (`map_pfn_rna`)** | 256 | 256 | 8 | 4 | 8 | ~25–30M (est., not measured) |
+
+The repo's `MMDiTConfig` defaults are `embed=256, cond=256, 8 blocks, 8 reg tokens`, and
+`MapPFNRNATrainingRunConfig` inherits them unchanged (it only overrides `num_steps=400000`,
+`num_shots=8`). We deliberately fixed the small `128/4` arch during the LinearSCM optimization and
+carried it into the downstream probe. So the zero-shot gap is **~250× fewer steps AND ~8× less model
+capacity** combined — reduced capacity likely contributes, and a fair comparison would match the paper's
+`256/8` arch. (Our d=50 model is otherwise identical to our d=20 model — 3.36M vs 3.35M params, the
+~15.5k difference being only the `in_dim`-dependent I/O projections.)
+
 **Conclusion:** the wall-clock compression that reached paper quality on LinearSCM in ~3000 steps does
 **not** shortcut the SERGIO→real downstream task. The bottleneck there is not optimizer-update
 efficiency but genuinely learning a transferable perturbation map from a much richer/more diverse prior.
