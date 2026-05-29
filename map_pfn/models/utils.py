@@ -13,6 +13,7 @@ from jaxtyping import Array, Float, PRNGKeyArray
 # "No valid engine configs" for some shapes on this cluster; "xla" is a robust
 # pure-XLA fallback (default). Override via MAPPFN_ATTN_IMPL=cudnn.
 _ATTN_IMPL = os.environ.get("MAPPFN_ATTN_IMPL", "xla")
+_ATTN_REMAT = os.environ.get("MAPPFN_ATTN_REMAT", "0") == "1"
 
 
 class MLP(eqx.Module):
@@ -118,7 +119,11 @@ def flash_attention(
     seq_len = q.shape[0]
 
     if _ATTN_IMPL != "cudnn" or not _HAS_GPU:
-        return _xla_attention(q, k, v).astype(orig_dtype)
+        # Optional rematerialization: recompute the S×S scores in the backward
+        # pass instead of storing them, bounding memory so larger num_samples
+        # (longer sequences) fit. Set MAPPFN_ATTN_REMAT=1 to enable.
+        attn = jax.checkpoint(_xla_attention) if _ATTN_REMAT else _xla_attention
+        return attn(q, k, v).astype(orig_dtype)
 
     pad_len = (pad_multiple - seq_len % pad_multiple) % pad_multiple
 
