@@ -224,14 +224,9 @@ class JaxLightningModule(LightningModule):
             return
 
         if self.optimizer_name == "muon":
-            optimizer = optax.contrib.muon(
-                self.lr_schedule,
-                beta=self.b1,
-                weight_decay=self.weight_decay,
-                adam_b1=self.b1,
-                adam_b2=self.b2,
-                adam_weight_decay=self.weight_decay,
-            )
+            from map_pfn.train.muon import muon_adamw
+
+            optimizer = muon_adamw(self.lr_schedule, adam_b1=self.b1, adam_b2=self.b2)
         else:
             optimizer = optax.adamw(
                 self.lr_schedule,
