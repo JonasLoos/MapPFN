@@ -142,6 +142,7 @@ JaxLightningModuleConfig = builds(
     step_size=0.01,
     guidance=2.0,
     eval_solver="dopri5",
+    optimizer_name="adamw",
     key=builds(jr.key, "${cfg.seed}"),
 )
 

@@ -8,6 +8,7 @@ import jax.random as jr
 import jax.sharding as jshard
 import numpy as np
 import optax
+import optax.contrib  # noqa: F401  (registers optax.contrib.muon)
 from jaxtyping import Array, Float, PRNGKeyArray
 from lightning import LightningModule
 
@@ -33,6 +34,7 @@ class JaxLightningModule(LightningModule):
         guidance: float = 2.0,
         ema_decay: float = 0.999,
         eval_solver: str = "dopri5",
+        optimizer_name: str = "adamw",
         *,
         key: PRNGKeyArray,
     ) -> None:
@@ -65,6 +67,7 @@ class JaxLightningModule(LightningModule):
         self.step_size = step_size
         self.guidance = guidance
         self.eval_solver = eval_solver
+        self.optimizer_name = optimizer_name
         self.optimizer = None
         self.opt_state = None
         self.ema_decay = ema_decay
@@ -216,19 +219,33 @@ class JaxLightningModule(LightningModule):
 
     @override
     def configure_optimizers(self) -> None:
-        """Configure AdamW optimizer and initialize optimizer state."""
+        """Configure the optimizer (AdamW or Muon) and initialize its state."""
         if self.optimizer is not None or self.opt_state is not None:
             return
 
-        optimizer = optax.adamw(
-            self.lr_schedule,
-            b1=self.b1,
-            b2=self.b2,
-            weight_decay=self.weight_decay,
-        )
+        if self.optimizer_name == "muon":
+            optimizer = optax.contrib.muon(
+                self.lr_schedule,
+                beta=self.b1,
+                weight_decay=self.weight_decay,
+                adam_b1=self.b1,
+                adam_b2=self.b2,
+                adam_weight_decay=self.weight_decay,
+            )
+        else:
+            optimizer = optax.adamw(
+                self.lr_schedule,
+                b1=self.b1,
+                b2=self.b2,
+                weight_decay=self.weight_decay,
+            )
+        # MultiSteps is a no-op at accum=1 and its mask handling is incompatible
+        # with optax muon's internal masking, so only wrap when actually accumulating.
+        if self.gradient_accumulation_steps > 1:
+            optimizer = optax.MultiSteps(optimizer, every_k_schedule=self.gradient_accumulation_steps)
         self.optimizer = optax.chain(
             optax.clip_by_global_norm(self.gradient_clipping),
-            optax.MultiSteps(optimizer, every_k_schedule=self.gradient_accumulation_steps),
+            optimizer,
         )
         params = eqx.filter(self.model, eqx.is_array)
         self.opt_state = self.optimizer.init(params)
