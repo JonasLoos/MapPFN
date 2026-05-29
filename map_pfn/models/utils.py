@@ -65,6 +65,9 @@ class SinusoidalPosEmb(eqx.Module):
         return emb
 
 
+_HAS_GPU = any(d.platform == "gpu" for d in jax.devices())
+
+
 def flash_attention(
     q: Float[Array, " seq_len num_heads head_dim"],
     k: Float[Array, " seq_len num_heads head_dim"],
@@ -84,6 +87,14 @@ def flash_attention(
     """
     orig_dtype = q.dtype
     seq_len = q.shape[0]
+
+    if not _HAS_GPU:
+        scale = 1.0 / jnp.sqrt(jnp.asarray(q.shape[-1], dtype=q.dtype))
+        attn_logits = jnp.einsum("shd,thd->hst", q, k) * scale
+        attn_weights = jax.nn.softmax(attn_logits, axis=-1)
+        out = jnp.einsum("hst,thd->shd", attn_weights, v)
+        return out.astype(orig_dtype)
+
     pad_len = (pad_multiple - seq_len % pad_multiple) % pad_multiple
 
     if pad_len > 0:
@@ -168,4 +179,4 @@ def solve_ode(
         saveat=diffrax.SaveAt(ts=time_grid) if time_grid is not None else diffrax.SaveAt(t1=True),
     )
 
-    return solution.ys.squeeze() if time_grid is None else solution.ys
+    return solution.ys[0] if time_grid is None else solution.ys
