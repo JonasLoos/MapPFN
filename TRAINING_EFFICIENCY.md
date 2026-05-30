@@ -89,15 +89,38 @@ Held-out **real Frangieh test** metrics vs the paper's zero-shot Table 3:
 | PDS ↓ | **0.12** | 0.17 |
 | MMD ↓ | 0.061 | 0.010 |
 
-We **match/beat the paper on W₂, MR and PDS** with ~40× less compute and an 8× smaller model,
-and reach **~62% of its DEG-AUPRC**. The AUPRC and MMD shortfalls are the honest gap — and both
-are `num_samples`-sensitive (we use 100 vs the paper's 200; fewer cells hurt DE detection and
-MMD), compounded by undertraining (10k vs 400k) and reduced capacity. The per-step val AUPRC was
-noisy (0.04–0.44 over 4 val batches); the full-test 0.21 is the reliable figure.
+**⚠️ The single-seed numbers above are NOT reliable** — see the seeded result below. The real
+Frangieh test set is small, so the test metrics have high run-to-run variance.
 
-**Takeaway:** the efficient recipe (small model + LR=3e-3) gets *near* paper quality on most
-metrics very cheaply. Closing the AUPRC/MMD gap → more steps (was still improving), num_samples=200
-for a like-for-like comparison (needs memory-efficient attention), and possibly a DE-aware loss.
+### Seeded result (n=3, the honest figure)
+Same recipe, 3 seeds (42/43/44), 10k steps each:
+
+| metric | ours (mean ± std) | paper (400k) |
+|---|---|---|
+| DEG AUPRC ↑ | **0.17 ± 0.04** | 0.34 |
+| W₂ ↓ | **31 ± 11** | 22.75 |
+| PDS ↓ | 0.30 ± 0.17 | 0.17 |
+| MR (→1) | **0.97** ± 0.02 | 1.00 |
+| MMD ↓ | 0.094 ± 0.04 | 0.010 |
+
+(per-seed AUPRC: 0.21 / 0.16 / 0.14; per-seed W₂: 21 / 43 / 29.)
+
+**Honest takeaway:** the small model **approaches but does not match** the paper — roughly **half
+the DEG-AUPRC**, W₂ within ~1.4×, and **MR matches (~1.0)** — at **~40× less compute and 8× fewer
+parameters**. The earlier "matches/beats paper on W₂/PDS" was an optimistic single-seed (42) draw;
+across seeds W₂ is 31±11. Only MR is low-variance.
+
+### What the noise means for optimization
+- Real-data Frangieh test metrics are **eval-noise-limited** at this dataset scale (val AUPRC
+  bounced 0.03→0.22→0.03 across checkpoints of one run; W₂ swings 21–43 across seeds). You **cannot
+  finely rank training tweaks by single-run real AUPRC** — must seed-average.
+- More steps did **not** reliably help (25k seed-42 test AUPRC 0.05, W₂ 39 — within the noise band,
+  with mag_ratio drifting >1, hinting at mild SERGIO-prior overfitting). ~10k is a fine budget.
+- `num_samples` is genuinely metric-confounding: it lifts the *synthetic-prior* AUPRC (0.21→0.33
+  from 100→200 cells) but on the tiny *real* test the effect is buried in noise (num_samples=200,
+  matched sample-budget, 20k steps: AUPRC 0.069, W₂ 30 — indistinguishable from num_samples=100).
+- Robust wins that survive seeding: **LR=3e-3** (vs 1e-3) and the overall efficient recipe. **Muon**
+  and **more steps** did not survive as clear wins.
 
 ## Remaining directions (not yet done)
 - Muon via custom integration (potentially stacks with LR=3e-3).
