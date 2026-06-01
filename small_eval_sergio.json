@@ -1,0 +1,14 @@
+{
+  "test/mean_rmse": 0.20711857080459595,
+  "test/var_rmse": 0.19347615540027618,
+  "test/mean_r2": 0.9437389969825745,
+  "test/var_r2": 0.895301342010498,
+  "test/wasserstein": 25.50896453857422,
+  "test/mmd": 0.012951366603374481,
+  "test/deg_auprc": 0.17890851199626923,
+  "test/wasserstein_mag_ratio": 1.0348211526870728,
+  "test/pds": 0.46666663885116577,
+  "_ckpt": "outputs/2026-06-01/13-28-45/model.ckpt",
+  "_limit_test_batches": 8,
+  "_seed": 42
+}

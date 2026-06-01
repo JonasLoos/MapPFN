@@ -1,0 +1,14 @@
+{
+  "test/mean_rmse": 0.2887968420982361,
+  "test/var_rmse": 0.22669833898544312,
+  "test/mean_r2": 0.9258226752281189,
+  "test/var_r2": 0.8818135857582092,
+  "test/wasserstein": 24.743087768554688,
+  "test/mmd": 0.022420933470129967,
+  "test/deg_auprc": 0.17458155751228333,
+  "test/wasserstein_mag_ratio": 1.0991744995117188,
+  "test/pds": 0.2849999964237213,
+  "_limit_test_batches": 8,
+  "_num_samples": 200,
+  "_seed": 42
+}

@@ -51,22 +51,39 @@ All on the subset proxy, num_samples=100, WSD schedule (warmup 0.02 / decay 0.3)
 steps) and ~2× better real-data zero-shot AUPRC. 5e-3 is noisier/no better; 1e-3 is slow.
 (Contradicts the earlier LinearSCM "1e-3≈3e-4" note — different scale/task.) **Adopt 3e-3.**
 
-### Muon (implemented, not adopted)
+### Muon (implemented, ADOPTED for SERGIO — verdict reversed 2026-06-01)
 `optax.contrib.muon` is incompatible with equinox's `None`-filtered param tree, so
 `map_pfn/train/muon.py` implements `muon_adamw`: Newton-Schulz orthogonalized momentum for
 2-D weight matrices, AdamW for everything else (norms/biases/embeddings), routed per-leaf via
-`jax.tree.map`. Enable with `cfg.module.optimizer_name=muon`.
+`jax.tree.map`. Enable with `cfg.module.optimizer_name=muon` (`peak_value=1e-2`).
 
-| run (800 steps) | loss@400 | prior_W2@800 | **real test AUPRC** | test W2 |
+**DECISIVE 3-seed result (full SERGIO, ns=200, bs=32, 15k steps, WSD cooldown 0.3), held-out
+SERGIO `/prior` (the clean deciding metric, NOT the noisy real-Frangieh AUPRC):**
+
+| optim | AUPRC s42/s43/s44 | **mean AUPRC** | mean W₂ | mean MMD |
 |---|---|---|---|---|
-| AdamW@3e-3 | 1.37 | 70.0 | **0.051** | 147 |
+| AdamW@3e-3 | 0.341 / 0.332 / 0.336 | 0.336 | 29.97 | 0.0289 |
+| **Muon@1e-2** | 0.369 / 0.349 / 0.378 | **0.365** | **28.87** | **0.0242** |
+
+**Muon@1e-2 beats AdamW@3e-3 at ALL THREE seeds on AUPRC (+8.6% mean), W₂, and MMD, at equal
+compute.** The gap widens through the WSD cooldown. → **adopt Muon@1e-2 for SERGIO pretraining.**
+
+This REVERSES the earlier "not adopted" call below, which was based on the noisy real-Frangieh
+subset AUPRC at ns=100/800 steps (0.022 vs 0.051) — that signal is near its noise floor and not
+a reliable optimizer ranking (see caveat). On the stable SERGIO-prior metric at ns=200 with full
+runs + seed-averaging, Muon is the clear winner.
+
+<details><summary>Superseded subset evidence (ns=100, 800 steps) — kept for history</summary>
+
+| run (800 steps) | loss@400 | prior_W2@800 | real test AUPRC (noisy) | test W2 |
+|---|---|---|---|---|
+| AdamW@3e-3 | 1.37 | 70.0 | 0.051 | 147 |
 | Muon@3e-3 | 1.36 | 71.8 | 0.022 | 150 |
 | Muon@1e-2 | **1.24** | **65.0** | 0.022 | **131** |
 
-Muon needs a higher LR (~1e-2; orthogonalized updates are smaller per element). It then
-converges faster early and is better on the *synthetic-prior* distribution metrics (W₂), **but
-both Muon runs give worse real-data test AUPRC than AdamW** — it optimizes the FM-loss proxy
-without improving DEG identification. **Not adopted.** LR was the real lever.
+Old read: Muon better on synthetic-prior W₂ but worse on real-data AUPRC → "not adopted, LR was
+the lever." Overturned by the seeded ns=200 result above; the real-AUPRC signal was noise.
+</details>
 
 ### Measurement caveat (important)
 At ≤800 steps on the subset, real-data Frangieh test AUPRC sits near its noise floor
@@ -119,8 +136,13 @@ across seeds W₂ is 31±11. Only MR is low-variance.
 - `num_samples` is genuinely metric-confounding: it lifts the *synthetic-prior* AUPRC (0.21→0.33
   from 100→200 cells) but on the tiny *real* test the effect is buried in noise (num_samples=200,
   matched sample-budget, 20k steps: AUPRC 0.069, W₂ 30 — indistinguishable from num_samples=100).
-- Robust wins that survive seeding: **LR=3e-3** (vs 1e-3) and the overall efficient recipe. **Muon**
-  and **more steps** did not survive as clear wins.
+- Robust wins that survive seeding: **LR=3e-3** (vs 1e-3), the overall efficient recipe, and —
+  on the stable SERGIO-prior metric at ns=200, 3 seeds — **Muon@1e-2** (see the reversed Muon
+  verdict above; +8.6% prior AUPRC at all 3 seeds). **More steps** did not survive as a clear win.
+- The deciding signal must be the clean held-out **SERGIO `/prior`** metric (ns=200), NOT real-Frangieh
+  AUPRC. Aside (2026-06-01): the official-checkpoint baseline study found our real-Frangieh AUPRC
+  is dominated by sparse DE signal at n=200 (0.6 ground-truth DEGs/pert vs leukemia 4.9) — the paper's
+  0.34 is a 10-resample mean; a single draw is unreliable. See OFFICIAL_BASELINE_COMPARISON.md.
 
 ## Remaining directions (not yet done)
 - Muon via custom integration (potentially stacks with LR=3e-3).

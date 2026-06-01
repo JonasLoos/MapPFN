@@ -1,0 +1,16 @@
+{
+  "test/mean_rmse": 0.7063403129577637,
+  "test/var_rmse": 0.22489149868488312,
+  "test/mean_r2": 0.8943820595741272,
+  "test/var_r2": 0.42456603050231934,
+  "test/wasserstein": 39.01066589355469,
+  "test/mmd": 0.1543503701686859,
+  "test/deg_auprc": 0.19681426882743835,
+  "test/wasserstein_mag_ratio": 2.3552229404449463,
+  "test/pds": 0.5019762516021729,
+  "_which": "small",
+  "_dataset": "datasets/single_cell/papalexi.h5ad",
+  "_ckpt": "outputs/2026-06-01/13-28-45/model.ckpt",
+  "_seed": 42,
+  "_limit": 999
+}
