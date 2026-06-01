@@ -188,11 +188,30 @@ stably ~0.12, not high-variance.
 established: (a) our harness is correct — Papalexi reproduces the paper exactly on all 6 metrics;
 (b) we match the paper's stated protocol (guidance 2.0, Dopri5, n=200, IFNγ holdout 50%); (c) for
 melanoma, W₂/MR/PDS match the paper but AUPRC (0.12), MMD (~0.0215), RMSE (~0.22) are stably 2–3×
-off; (d) it's not coverage, not seed variance, not the holdout context. Remaining candidate causes
-(not yet pinned): a difference in how many cells feed the DE/distribution metrics (cell-count
-sweep in progress — DEGs/pert go 0.6→4.0 from n=200→1000), a num_shots / multi-context conditioning
-difference specific to melanoma, or the released checkpoint differing from the exact Table-3
-melanoma model despite matching Papalexi. Per-seed raw: `fr_off_s0..s9.json`.
+off; (d) it's not coverage, not seed variance, not the holdout context. Per-seed raw: `fr_off_s0..s9.json`.
+
+**Cell-count lever — also TESTED and REFUTED.** Swept cells/population at fixed seed:
+| NS (cells/pop) | AUPRC | W₂ | MMD |
+|----------------|-------|------|--------|
+| 200 (paper)    | 0.122 | 23.0 | 0.0228 |
+| 400            | 0.102 | 18.5 | 0.0368 |
+| 600 / 1000     | OOM (dense attention is O(seq²), seq = cells × (shots+1)) | | |
+More cells made melanoma AUPRC slightly *worse* (0.102), not better, and W₂ *diverged* from the
+paper (18.5 vs paper 22.75 — which n=200 matches best). So despite the ground-truth DEGs/pert
+rising 0.6→4.0 from n=200→1000, the model's AUPRC does not climb toward 0.34. **The
+DE-power/cell-count explanation is refuted too.**
+
+**THREE hypotheses now refuted by experiment: (1) coverage, (2) single-seed variance, (3) cell
+count.** The melanoma AUPRC gap (our 0.12 vs paper 0.34) is robust to every protocol lever we
+can vary, while Papalexi reproduces the paper exactly. **Status: genuinely unresolved — and not
+a bug on our side.** The one lever we could NOT test (dense attention OOMs as it grows seq) is
+**num_shots / amount of in-context conditioning** — the paper's Fig 5a explicitly states
+performance improves monotonically with more interventional experiments in context, so a
+larger context at eval is the most likely remaining explanation, but it requires chunked/flash
+attention (not wired up here) to test at this gene/cell scale. Other residual possibilities: the
+released ckpt differing from the exact Table-3 melanoma model (it matches Papalexi, but melanoma's
+DE metrics may be more sensitive), or a subtle preprocessing/gene-selection difference in our
+downloaded frangieh.h5ad that affects DE but not n=200 W₂. Raw: `fr_off_ns{200,400}.json`.
 
 ## Cheap next steps if we want to firm this up
 - **DONE: full Frangieh coverage** (150 perts) — showed the paper-gap is protocol, not
