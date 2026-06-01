@@ -10,6 +10,7 @@ Usage:
 Writes <tag>.json.
 """
 import json
+import os
 import sys
 
 import jax.random as jr
@@ -33,6 +34,7 @@ limit = int(sys.argv[5]) if len(sys.argv) > 5 else 999
 seed = int(sys.argv[6]) if len(sys.argv) > 6 else 42
 full = "full" in sys.argv[7:]  # full-coverage: every perturbation a query (not just the 32-pert holdout)
 num_nodes = 50
+num_samples = int(os.environ.get("NS", "200"))  # cells per population (paper=200)
 
 if which == "small":
     mmdit = MMDiTConfig(
@@ -59,7 +61,7 @@ module = instantiate(
 )
 datamodule = instantiate(
     DataModuleConfig(
-        dataset=PerturbationDatasetConfig(seed=seed, num_samples=200),
+        dataset=PerturbationDatasetConfig(seed=seed, num_samples=num_samples),
         dataset_path=dataset_path,
         ood=False,
     )

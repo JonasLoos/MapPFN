@@ -176,10 +176,23 @@ averaging is *essential precisely because* melanoma DE is this sparse, while leu
 DE) is stable at one draw.** This cleanly explains why leukemia matches and melanoma doesn't,
 and why W₂/MR/PDS (not DE-thresholded) match for melanoma while DE-AUPRC doesn't.
 
-**So: our eval is CORRECT; the gap is single-seed variance under sparse DE, not a bug.**
-Decisive confirmation (needs GPU, queued): rerun the IFNγ melanoma model eval over 10
-resampling seeds → expect AUPRC mean to rise toward ~0.34 with high per-seed variance. (MMD/RMSE
-melanoma being ~2× off is the same story — noise-dominated at n=200's sparse-signal regime.)
+**Single-seed-variance hypothesis — TESTED and REFUTED.** Ran the IFNγ melanoma model eval
+over 10 resampling seeds (0–9): AUPRC = **0.122 ± 0.022** (range 0.095–0.177; W₂ stably ~22.7,
+matching paper; MMD stably ~0.0215). So averaging seeds does NOT lift melanoma AUPRC toward the
+paper's 0.34 — the single-seed 0.141 was representative, and the gap is **real, systematic, and
+low-variance, not resampling noise.** My variance explanation was wrong (and so was the earlier
+"coverage" one). The DE-sparsity fact (0.6 DEGs/pert at n=200) is real but makes melanoma AUPRC
+stably ~0.12, not high-variance.
+
+**HONEST STATUS — the melanoma AUPRC/MMD/RMSE gap vs paper is UNRESOLVED.** What is firmly
+established: (a) our harness is correct — Papalexi reproduces the paper exactly on all 6 metrics;
+(b) we match the paper's stated protocol (guidance 2.0, Dopri5, n=200, IFNγ holdout 50%); (c) for
+melanoma, W₂/MR/PDS match the paper but AUPRC (0.12), MMD (~0.0215), RMSE (~0.22) are stably 2–3×
+off; (d) it's not coverage, not seed variance, not the holdout context. Remaining candidate causes
+(not yet pinned): a difference in how many cells feed the DE/distribution metrics (cell-count
+sweep in progress — DEGs/pert go 0.6→4.0 from n=200→1000), a num_shots / multi-context conditioning
+difference specific to melanoma, or the released checkpoint differing from the exact Table-3
+melanoma model despite matching Papalexi. Per-seed raw: `fr_off_s0..s9.json`.
 
 ## Cheap next steps if we want to firm this up
 - **DONE: full Frangieh coverage** (150 perts) — showed the paper-gap is protocol, not
