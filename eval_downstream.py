@@ -35,6 +35,7 @@ seed = int(sys.argv[6]) if len(sys.argv) > 6 else 42
 full = "full" in sys.argv[7:]  # full-coverage: every perturbation a query (not just the 32-pert holdout)
 num_nodes = 50
 num_samples = int(os.environ.get("NS", "200"))  # cells per population (paper=200)
+opt = os.environ.get("OPT", "adamw")  # must match the ckpt's optimizer (muon|adamw) for opt_state deserialize
 
 if which == "small":
     mmdit = MMDiTConfig(
@@ -56,6 +57,7 @@ module = instantiate(
         lr_schedule=LRScheduleConfig(total_steps=50_000),
         guidance=2.0,
         gradient_accumulation_steps=accum,
+        optimizer_name=opt,
         key=builds(jr.key, seed),
     )
 )

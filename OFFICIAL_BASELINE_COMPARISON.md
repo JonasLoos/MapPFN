@@ -213,6 +213,38 @@ released ckpt differing from the exact Table-3 melanoma model (it matches Papale
 DE metrics may be more sensitive), or a subtle preprocessing/gene-selection difference in our
 downloaded frangieh.h5ad that affects DE but not n=200 W₂. Raw: `fr_off_ns{200,400}.json`.
 
+## Muon-vs-AdamW DOWNSTREAM TRANSFER (2026-06-02) — the SERGIO-prior win does NOT transfer
+Evaluated all 6 SERGIO-pretrained small checkpoints (Muon@1e-2 and AdamW@3e-3, seeds 42/43/44)
+zero-shot on real Frangieh + Papalexi (eval-seed 42; raw: `fr_*.json`, `pa_*.json`,
+`{frangieh,papalexi}_small.json`). Seed-means:
+
+| dataset  | metric    | Muon@1e-2 mean | AdamW@3e-3 mean | better |
+|----------|-----------|----------------|-----------------|--------|
+| Frangieh | AUPRC     | 0.122*         | 0.040           | noise* |
+| Frangieh | W₂ ↓      | 42.2           | **28.1**        | AdamW  |
+| Frangieh | MMD ↓     | 0.128          | **0.087**       | AdamW  |
+| Papalexi | AUPRC     | 0.191          | 0.181           | ~tie   |
+| Papalexi | W₂ ↓      | 122.4          | **56.3**        | AdamW  |
+| Papalexi | MMD ↓     | 0.238          | **0.154**       | AdamW  |
+
+\* Muon's Frangieh-AUPRC mean is driven by ONE outlier seed (s43=0.265; the other two are
+0.055/0.045 ≈ AdamW). Real-data AUPRC is noise-dominated (the small model sits near the floor),
+so AUPRC differences here are NOT meaningful.
+
+**Finding: AdamW transfers BETTER to real data on every distribution metric (W₂ and MMD, both
+datasets — 4/4 mean-comparisons), while real-data AUPRC is a noisy tie.** This is the inverse of
+the SERGIO-`/prior` result (where Muon won AUPRC/W₂/MMD at all 3 seeds). So **Muon mildly OVERFITS
+the SERGIO prior**: it fits the in-distribution prior better but generalizes WORSE to real
+single-cell data. Muon: lower prior-W₂ / higher real-W₂; AdamW: the opposite — a textbook
+fit-vs-transfer tradeoff.
+
+**Implication for the Muon-adoption verdict (TRAINING_EFFICIENCY.md):** the "adopt Muon@1e-2"
+call was made purely on the SERGIO-`/prior` metric. If the actual goal is **real-data transfer**
+(the paper's application), this result says Muon does NOT help and AdamW is the safer choice on
+distribution fit. Adopt Muon only if optimizing the SERGIO prior itself is the objective.
+**Caveat:** single eval-seed per model → real metrics are noisy; the W₂/MMD pattern is consistent
+across 4 comparisons × 3 seeds (convincing as a direction) but absolute values swing a lot.
+
 ## Cheap next steps if we want to firm this up
 - **DONE: full Frangieh coverage** (150 perts) — showed the paper-gap is protocol, not
   coverage (see above). The remaining unknown is the paper's exact real-data inference config.

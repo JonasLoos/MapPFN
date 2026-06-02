@@ -1,0 +1,16 @@
+{
+  "test/mean_rmse": 0.4012107253074646,
+  "test/var_rmse": 0.23683227598667145,
+  "test/mean_r2": 0.9613261222839355,
+  "test/var_r2": 0.41308146715164185,
+  "test/wasserstein": 25.878684997558594,
+  "test/mmd": 0.05897117406129837,
+  "test/deg_auprc": 0.03792464733123779,
+  "test/wasserstein_mag_ratio": 1.1414110660552979,
+  "test/pds": 0.46166667342185974,
+  "_which": "small",
+  "_dataset": "datasets/single_cell/frangieh.h5ad",
+  "_ckpt": "outputs/2026-06-01/17-57-05/model.ckpt",
+  "_seed": 42,
+  "_limit": 999
+}

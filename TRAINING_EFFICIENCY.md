@@ -68,6 +68,13 @@ SERGIO `/prior` (the clean deciding metric, NOT the noisy real-Frangieh AUPRC):*
 **Muon@1e-2 beats AdamW@3e-3 at ALL THREE seeds on AUPRC (+8.6% mean), W₂, and MMD, at equal
 compute.** The gap widens through the WSD cooldown. → **adopt Muon@1e-2 for SERGIO pretraining.**
 
+> **CAVEAT — this is a SERGIO-`/prior` (in-distribution) win that does NOT transfer to real data
+> (2026-06-02).** All 6 checkpoints evaluated zero-shot on Frangieh+Papalexi: **AdamW transfers
+> better on every real-data distribution metric** (W₂ and MMD, both datasets, 4/4 seed-mean
+> comparisons); real-data AUPRC is a noisy tie. So Muon mildly *overfits* the SERGIO prior (lower
+> prior-W₂ but higher real-W₂). Adopt Muon only if fitting the SERGIO prior itself is the goal; if
+> the objective is real-data transfer, AdamW is the safer choice. See OFFICIAL_BASELINE_COMPARISON.md.
+
 This REVERSES the earlier "not adopted" call below, which was based on the noisy real-Frangieh
 subset AUPRC at ns=100/800 steps (0.022 vs 0.051) — that signal is near its noise floor and not
 a reliable optimizer ranking (see caveat). On the stable SERGIO-prior metric at ns=200 with full
