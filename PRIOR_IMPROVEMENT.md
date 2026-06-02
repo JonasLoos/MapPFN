@@ -119,6 +119,27 @@ artifact** (paper's 0.34 = mean over 10 cell-resampling seeds; melanoma DE is to
 for a single draw — see OFFICIAL_BASELINE_COMPARISON.md), not a deficiency of the prior. The lever
 for AUPRC is the eval protocol (resampling), not the prior.
 
+## 5c. Mid-size model (11M) on v1noise — capacity doesn't help at matched compute
+Combined the two wins: a model **between** small (3.36M) and paper (43M) — `embed=192, 6 blocks,
+6 heads, 6 reg = 11.08M params` — on the v1noise prior, same recipe, 4000 steps (matched to small).
+
+| metric | small 3.36M | **med 11M** | paper 43M |
+|---|---|---|---|
+| Frangieh W₂ ↓ | **19.8** | 20.7 | 22.75 |
+| Frangieh MMD ↓ | 0.037 | 0.038 | 0.010 |
+| Frangieh AUPRC ↑ | **0.050** | 0.042 | 0.34 |
+| Papalexi W₂ ↓ | **20.8** | 28.5 | — |
+| Papalexi MMD ↓ | **0.085** | 0.125 | — |
+
+**At matched 4000 steps the 11M model does NOT beat the 3.36M model** — tied on Frangieh, worse on
+Papalexi. The early-training trace shows why: it was *behind* at step 2000 (Frangieh val W₂ 37.7 vs
+small 31.5) and the LR cooldown only rescued Frangieh (→19.3), not Papalexi → the bigger model is
+**undertrained** at this budget. MMD also did not move toward the paper's 0.010, so that gap is a
+`num_samples` effect (we use 100, paper 200), not capacity. Practical note: the 11M model is ~8× slower
+per step here (0.77 vs 6 it/s) AND has pathologically slow one-time XLA compiles for the CFG'd euler
+ODE at the new shape (~25 min each), so a fair capacity test (≥10k steps) is expensive. **Takeaway:
+the small 3.36M recipe is well-matched; don't naively scale capacity without also scaling steps.**
+
 ## 6. Recommendation
 Adopt the **v1noise** technical-noise settings for the SERGIO prior when the objective is
 real-data transfer: `dropout_q_range=(10,45)`, `noise_s_range=(0.3,1.0)`,

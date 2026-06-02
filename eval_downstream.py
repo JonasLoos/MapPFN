@@ -38,11 +38,17 @@ num_samples = int(os.environ.get("NS", "200"))  # cells per population (paper=20
 opt = os.environ.get("OPT", "adamw")  # must match the ckpt's optimizer (muon|adamw) for opt_state deserialize
 
 if which == "small":
+    # arch from env (defaults = the 3.36M small model); set EMBED/NBLK/NHEAD/NREG to match a
+    # custom-size training run (cond_dim = embed_dim).
+    ed = int(os.environ.get("EMBED", "128"))
+    nb = int(os.environ.get("NBLK", "4"))
+    nh = int(os.environ.get("NHEAD", "4"))
+    nr = int(os.environ.get("NREG", "4"))
     mmdit = MMDiTConfig(
-        embed_dim=128, cond_dim=128, noise_dim=num_nodes,
-        num_heads=4, num_blocks=4, num_reg_tokens=4, key=builds(jr.key, seed),
+        embed_dim=ed, cond_dim=ed, noise_dim=num_nodes,
+        num_heads=nh, num_blocks=nb, num_reg_tokens=nr, key=builds(jr.key, seed),
     )
-    model_cfg = MapPFNConfig(decoder=mmdit, in_dim=num_nodes, cond_dim=128, key=builds(jr.key, seed))
+    model_cfg = MapPFNConfig(decoder=mmdit, in_dim=num_nodes, cond_dim=ed, key=builds(jr.key, seed))
     accum = 1
 elif which == "official":
     mmdit = MMDiTConfig(noise_dim=num_nodes, key=builds(jr.key, seed))  # defaults = paper arch

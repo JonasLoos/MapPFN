@@ -1,0 +1,35 @@
+model: 11,078,846 params (embed192/6blk/6h/6reg), v1noise prior, 4000 steps, seed42
+=== fr_v1noise_s42_med ===
+{
+  "test/mean_rmse": 0.2848013937473297,
+  "test/var_rmse": 0.1975274235010147,
+  "test/mean_r2": 0.9797878265380859,
+  "test/var_r2": 0.6761772632598877,
+  "test/wasserstein": 20.737985610961914,
+  "test/mmd": 0.03794131428003311,
+  "test/deg_auprc": 0.042091887444257736,
+  "test/wasserstein_mag_ratio": 0.9197418093681335,
+  "test/pds": 0.49833327531814575,
+  "_which": "small",
+  "_dataset": "datasets/single_cell/frangieh.h5ad",
+  "_ckpt": "outputs/prior_v1noise_s42_med/model.ckpt",
+  "_seed": 42,
+  "_limit": 999
+}
+=== pa_v1noise_s42_med ===
+{
+  "test/mean_rmse": 0.5405170917510986,
+  "test/var_rmse": 0.2311486005783081,
+  "test/mean_r2": 0.9805430769920349,
+  "test/var_r2": 0.7239510416984558,
+  "test/wasserstein": 28.458148956298828,
+  "test/mmd": 0.12489345669746399,
+  "test/deg_auprc": 0.1714780032634735,
+  "test/wasserstein_mag_ratio": 1.6549443006515503,
+  "test/pds": 0.5000000596046448,
+  "_which": "small",
+  "_dataset": "datasets/single_cell/papalexi.h5ad",
+  "_ckpt": "outputs/prior_v1noise_s42_med/model.ckpt",
+  "_seed": 42,
+  "_limit": 999
+}
