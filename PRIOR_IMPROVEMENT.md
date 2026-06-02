@@ -89,8 +89,40 @@ seed-variance is small, so the gains are real, not noise:
 
 (seed-43 v2dag/v3combo run for completeness; results in `fr_*/pa_*_s43.json`.)
 
-## 5. Recommendation
+## 5b. DEG-breadth fix — TESTED & REFUTED (the AUPRC lever that wasn't)
+The one mismatch v1noise leaves open is DEG **breadth**: a SERGIO KO still perturbs more genes
+than a real one. First, a measurement correction: `validate_variants.de_stats` pools each KO
+across all (different) GRNs, so the huge N inflates significance — it is NOT a valid breadth
+measure for synthetic data. The correct **per-context** measure (`bench/deg_breadth_diag.py`)
+shows a sparse-modular GRN genuinely cuts breadth: KO-descendants 16→2, DEGs/KO 24→12, and that
+structure **does** depend on the GRN (my earlier "structure doesn't help" was the pooling artifact).
+
+Two breadth-reduced priors were built and trained (keeping v1noise marginals):
+- **v5real**: sparse GRN + stronger dropout/baseline → DEGs/KO ~17.5, fracZero ~0.26 (real range).
+- **v4xsparse**: aggressive sparse GRN → DEGs/KO ~12, fracZero ~0.44 (too sparse).
+
+Zero-shot transfer (seed 42), vs the v1noise winner:
+
+| metric | v1noise | v5real | v4xsparse |
+|---|---|---|---|
+| Frangieh W₂ ↓ | **19.8** | 25.7 | 19.0 |
+| Frangieh DEG-AUPRC ↑ | **0.050** | 0.036 | 0.034 |
+| Papalexi W₂ ↓ | 20.8 | 22.6 | **19.6** |
+| Papalexi DEG-AUPRC ↑ | 0.178 | **0.184** | 0.169 |
+
+**Refuted:** narrowing the prior's DEG breadth does NOT lift real-data AUPRC (v1noise's Frangieh
+0.050 stays best; Papalexi ~tie), and the sparse GRN needed for it tends to *hurt* W₂/MMD —
+plausibly because a sparse GRN strips the gene–gene **correlation** structure that matters more
+for distribution transfer than breadth does. So **no prior change tested — marginals, effect
+magnitude, or DEG breadth — closes the AUPRC gap.** This confirms the gap is an **eval-resampling
+artifact** (paper's 0.34 = mean over 10 cell-resampling seeds; melanoma DE is too sparse at n=200
+for a single draw — see OFFICIAL_BASELINE_COMPARISON.md), not a deficiency of the prior. The lever
+for AUPRC is the eval protocol (resampling), not the prior.
+
+## 6. Recommendation
 Adopt the **v1noise** technical-noise settings for the SERGIO prior when the objective is
 real-data transfer: `dropout_q_range=(10,45)`, `noise_s_range=(0.3,1.0)`,
-`library_mu_range=(5.0,6.5)` (in `SergioDatasetConfig`). Validate at full prior scale + a 2nd
-seed (seed-43 replication in flight), then revisit DEG-breadth for the AUPRC gap.
+`library_mu_range=(5.0,6.5)` (in `SergioDatasetConfig`). This is the single robust prior win
+(2-seed confirmed, both datasets). Do NOT pursue DAG-effect or DEG-breadth changes — tested,
+they don't help. For the AUPRC gap specifically, use the paper's 10-seed eval resampling, not a
+prior change. Next: validate v1noise at full prior scale (6000 ctx) + larger model.

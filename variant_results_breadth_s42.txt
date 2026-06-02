@@ -1,0 +1,68 @@
+=== fr_v5real_s42 ===
+{
+  "test/mean_rmse": 0.38022464513778687,
+  "test/var_rmse": 0.15076646208763123,
+  "test/mean_r2": 0.9792957305908203,
+  "test/var_r2": 0.7276750206947327,
+  "test/wasserstein": 25.695552825927734,
+  "test/mmd": 0.04696130007505417,
+  "test/deg_auprc": 0.03622137010097504,
+  "test/wasserstein_mag_ratio": 1.082243800163269,
+  "test/pds": 0.48000001907348633,
+  "_which": "small",
+  "_dataset": "datasets/single_cell/frangieh.h5ad",
+  "_ckpt": "outputs/prior_v5real_s42/model.ckpt",
+  "_seed": 42,
+  "_limit": 999
+}
+=== pa_v5real_s42 ===
+{
+  "test/mean_rmse": 0.4517425298690796,
+  "test/var_rmse": 0.27285826206207275,
+  "test/mean_r2": 0.9826154708862305,
+  "test/var_r2": 0.7226395606994629,
+  "test/wasserstein": 22.5492000579834,
+  "test/mmd": 0.1316988617181778,
+  "test/deg_auprc": 0.1838327795267105,
+  "test/wasserstein_mag_ratio": 1.3996837139129639,
+  "test/pds": 0.49242424964904785,
+  "_which": "small",
+  "_dataset": "datasets/single_cell/papalexi.h5ad",
+  "_ckpt": "outputs/prior_v5real_s42/model.ckpt",
+  "_seed": 42,
+  "_limit": 999
+}
+=== fr_v4xsparse_s42 ===
+{
+  "test/mean_rmse": 0.2519371211528778,
+  "test/var_rmse": 0.24485744535923004,
+  "test/mean_r2": 0.9884658455848694,
+  "test/var_r2": 0.581909716129303,
+  "test/wasserstein": 18.952356338500977,
+  "test/mmd": 0.049946706742048264,
+  "test/deg_auprc": 0.03355298936367035,
+  "test/wasserstein_mag_ratio": 0.8537085056304932,
+  "test/pds": 0.4983333349227905,
+  "_which": "small",
+  "_dataset": "datasets/single_cell/frangieh.h5ad",
+  "_ckpt": "outputs/prior_v4xsparse_s42/model.ckpt",
+  "_seed": 42,
+  "_limit": 999
+}
+=== pa_v4xsparse_s42 ===
+{
+  "test/mean_rmse": 0.37920302152633667,
+  "test/var_rmse": 0.2719684839248657,
+  "test/mean_r2": 0.9844005107879639,
+  "test/var_r2": 0.6513280868530273,
+  "test/wasserstein": 19.634580612182617,
+  "test/mmd": 0.1105644553899765,
+  "test/deg_auprc": 0.16931341588497162,
+  "test/wasserstein_mag_ratio": 1.2154676914215088,
+  "test/pds": 0.5,
+  "_which": "small",
+  "_dataset": "datasets/single_cell/papalexi.h5ad",
+  "_ckpt": "outputs/prior_v4xsparse_s42/model.ckpt",
+  "_seed": 42,
+  "_limit": 999
+}
