@@ -76,6 +76,19 @@ Identical recipe; only the prior changes. Test-split metrics on real data
   needs a sparser-effect GRN (fewer downstream targets per KO) and/or the paper's 10-seed
   resampling. That is the natural next experiment.
 
+## 4b. Seed-43 replication (confirms the headline)
+The v0base→v1noise comparison reproduces almost exactly at a second seed — baseline
+seed-variance is small, so the gains are real, not noise:
+
+| v0base → v1noise | seed-42 | seed-43 |
+|---|---|---|
+| Frangieh W₂ | 26.1 → 19.8 | 25.4 → **19.4** |
+| Frangieh mag-ratio | 1.13 → 0.92 | 1.13 → **0.92** |
+| Papalexi W₂ | 52.6 → 20.8 | 50.2 → **19.6** |
+| Papalexi mag-ratio | 3.17 → 1.27 | 3.02 → **1.15** |
+
+(seed-43 v2dag/v3combo run for completeness; results in `fr_*/pa_*_s43.json`.)
+
 ## 5. Recommendation
 Adopt the **v1noise** technical-noise settings for the SERGIO prior when the objective is
 real-data transfer: `dropout_q_range=(10,45)`, `noise_s_range=(0.3,1.0)`,
