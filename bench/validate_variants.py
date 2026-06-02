@@ -15,14 +15,21 @@ warnings.filterwarnings("ignore")
 RNG = np.random.default_rng(0)
 MAXCELLS = 30_000
 
-FILES = {
-    "v0base": "datasets/synthetic/sergio_v0base.h5ad",
-    "v1noise": "datasets/synthetic/sergio_v1noise.h5ad",
-    "v2dag": "datasets/synthetic/sergio_v2dag.h5ad",
-    "v3combo": "datasets/synthetic/sergio_v3combo.h5ad",
-    "--Frangieh": "datasets/single_cell/frangieh.h5ad",
-    "--Papalexi": "datasets/single_cell/papalexi.h5ad",
-}
+import sys
+
+if len(sys.argv) > 1:  # explicit variant list, e.g. `validate_variants.py v1noise v4mod v4sparse`
+    FILES = {v: f"datasets/synthetic/sergio_{v}.h5ad" for v in sys.argv[1:]}
+    FILES["--Frangieh"] = "datasets/single_cell/frangieh.h5ad"
+    FILES["--Papalexi"] = "datasets/single_cell/papalexi.h5ad"
+else:
+    FILES = {
+        "v0base": "datasets/synthetic/sergio_v0base.h5ad",
+        "v1noise": "datasets/synthetic/sergio_v1noise.h5ad",
+        "v2dag": "datasets/synthetic/sergio_v2dag.h5ad",
+        "v3combo": "datasets/synthetic/sergio_v3combo.h5ad",
+        "--Frangieh": "datasets/single_cell/frangieh.h5ad",
+        "--Papalexi": "datasets/single_cell/papalexi.h5ad",
+    }
 
 
 def dense(x):

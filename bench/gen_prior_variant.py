@@ -64,6 +64,35 @@ VARIANTS: dict[str, dict] = {
         num_groups_range=(1, 6),
         hill_n_range=(1.0, 1.8),
     ),
+    # --- DEG-BREADTH sweep: keep v1noise marginals, make the GRN sparse+modular so a
+    # KO stays inside its module (real perts hit ~5-16 genes, SERGIO default ~38). ---
+    # v4mod: many modules + high modularity (within-group edges dominate -> contained).
+    "v4mod": dict(
+        dropout_q_range=(10.0, 45.0), noise_s_range=(0.3, 1.0), library_mu_range=(5.0, 6.5),
+        num_groups_range=(6, 10), modularity_range=(1000.0, 4000.0),
+    ),
+    # v4sparse: + sparser DAG (r->1) and fewer hubs (high delta_out) so fewer descendants.
+    "v4sparse": dict(
+        dropout_q_range=(10.0, 45.0), noise_s_range=(0.3, 1.0), library_mu_range=(5.0, 6.5),
+        num_groups_range=(6, 10), modularity_range=(1000.0, 4000.0),
+        regulators_per_gene_range=(1.0, 1.3), delta_out_range=(15.0, 40.0),
+    ),
+    # v4xsparse: aggressive - many tiny modules, very high modularity, near-tree, no hubs.
+    "v4xsparse": dict(
+        dropout_q_range=(10.0, 45.0), noise_s_range=(0.3, 1.0), library_mu_range=(5.0, 6.5),
+        num_groups_range=(10, 16), modularity_range=(3000.0, 8000.0),
+        regulators_per_gene_range=(1.0, 1.1), delta_out_range=(40.0, 100.0),
+        delta_in_range=(80.0, 250.0),
+    ),
+    # v5real: THE breadth fix. Sparse-modular GRN (DEGs/KO ~17.5, real range) + stronger
+    # dropout cut & higher baseline to keep marginals realistic (fracZero ~0.26 like v1noise).
+    # Targets BOTH real marginals AND real DEG breadth. (deg_breadth_diag.py.)
+    "v5real": dict(
+        dropout_q_range=(5.0, 28.0), noise_s_range=(0.3, 1.0), library_mu_range=(5.5, 7.0),
+        mr_high_range=(3.5, 6.0), num_groups_range=(8, 14), modularity_range=(2000.0, 6000.0),
+        regulators_per_gene_range=(1.0, 1.4), delta_out_range=(30.0, 80.0),
+        delta_in_range=(50.0, 200.0),
+    ),
 }
 
 
