@@ -245,6 +245,34 @@ distribution fit. Adopt Muon only if optimizing the SERGIO prior itself is the o
 **Caveat:** single eval-seed per model → real metrics are noisy; the W₂/MMD pattern is consistent
 across 4 comparisons × 3 seeds (convincing as a direction) but absolute values swing a lot.
 
+## WHY Muon transfers worse — it's the COOLDOWN, i.e. "victim of better optimization" (2026-06-02)
+Extracted prior-fit AND real-Frangieh-val transfer at all 6 val checkpoints for all runs (pp.py
+on the training logs). The real-transfer gap is NOT present mid-training — it opens entirely in the
+WSD LR-cooldown (last 30%, 10.5k→15k). Seed-means, `W2real` = real-Frangieh val W₂ (↓ = better transfer):
+
+| optim | prior-AUPRC 10k→15k | real-W₂ 10k→15k |
+|-------|--------------------|------------------|
+| Muon  | 0.341 → **0.365** (+0.024) | 26.8 → **54.5** (+28, collapses) |
+| AdamW | 0.331 → 0.334 (+0.003)     | 24.6 → 32.9 (+8, mild)          |
+(per-seed real-W₂ @15k: Muon 63.6/47.9/51.9, AdamW 27.1/38.6.)
+
+**Diagnostic:** at MATCHED prior-fit (≤10k, pre-cooldown, both at prior-AUPRC ~0.33–0.35) the two
+optimizers transfer the SAME (real-W₂ ~24–30 for both). The divergence appears only in the deep
+cooldown, exactly where Muon drives prior-fit to 0.37 (a level AdamW never reaches). AdamW barely
+moves in the final cooldown; Muon converts the low-LR phase into a big prior gain that is
+**prior-overfitting** — bought prior-AUPRC, paid back in transfer.
+
+**Conclusion:** Muon's worse transfer is NOT an optimizer-specific generalization defect — it's a
+consequence of Muon being the *more effective* optimizer. It exploits the cooldown to descend
+deeper into the SERGIO-prior-specific minimum (which doesn't transfer); AdamW stays effectively
+under-converged on the prior and keeps better transfer. At equal prior-fit they're equivalent.
+Practical implication: prior-AUPRC is a partly-misleading objective (its cooldown gains are
+overfitting); for real-data transfer, early-stop before the deep cooldown or use a shallower
+cooldown — and don't pick the optimizer on prior-AUPRC alone. Caveat: real-W₂ is val-split /
+noisy (limit_val_batches=2); pattern is consistent across 3 Muon + 2 AdamW seeds and agrees with
+the clean test-split finals (Muon real-W₂ 42 vs AdamW 28). Clean confirmation would need
+intermediate checkpoints eval'd downstream at matched prior-fit.
+
 ## Cheap next steps if we want to firm this up
 - **DONE: full Frangieh coverage** (150 perts) — showed the paper-gap is protocol, not
   coverage (see above). The remaining unknown is the paper's exact real-data inference config.
