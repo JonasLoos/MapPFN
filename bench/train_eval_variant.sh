@@ -13,7 +13,7 @@ STEPS="${3:-6000}"
 # architecture via env (defaults = small 3.36M); ARCH name suffixes the run/tag so a bigger
 # model doesn't collide with the small-model JSONs. cond_dim = EMBED.
 EMBED="${EMBED:-128}"; NBLK="${NBLK:-4}"; NHEAD="${NHEAD:-4}"; NREG="${NREG:-4}"
-BS="${BS:-64}"; LR="${LR:-3e-3}"; ARCH="${ARCH:-}"
+BS="${BS:-64}"; LR="${LR:-3e-3}"; ARCH="${ARCH:-}"; OPT="${OPT:-adamw}"  # OPT=muon -> set LR=1e-2
 SUF="${ARCH:+_$ARCH}"
 PRIOR="datasets/synthetic/sergio_${V}.h5ad"
 RUNDIR="outputs/prior_${V}_s${SEED}${SUF}"
@@ -33,7 +33,7 @@ echo "=== TRAIN $V seed=$SEED steps=$STEPS arch=${EMBED}/${NBLK}blk/${NHEAD}h/${
   cfg.module.model.decoder.embed_dim="$EMBED" cfg.module.model.decoder.cond_dim="$EMBED" \
   cfg.module.model.decoder.num_heads="$NHEAD" cfg.module.model.decoder.num_blocks="$NBLK" \
   cfg.module.model.decoder.num_reg_tokens="$NREG" cfg.module.model.cond_dim="$EMBED" \
-  cfg.module.gradient_accumulation_steps=1 cfg.module.optimizer_name=adamw \
+  cfg.module.gradient_accumulation_steps=1 cfg.module.optimizer_name="$OPT" \
   cfg.module.lr_schedule.peak_value="$LR" cfg.module.lr_schedule.decay_frac=0.3 \
   cfg.module.lr_schedule.warmup_frac=0.02 \
   cfg.module.eval_solver=euler cfg.module.step_size=0.1 \
@@ -47,9 +47,9 @@ echo "=== ckpt: $CKPT ==="
 ls -la "$CKPT"
 
 echo "=== EVAL Frangieh ==="
-NS=200 OPT=adamw EMBED="$EMBED" NBLK="$NBLK" NHEAD="$NHEAD" NREG="$NREG" \
+NS=200 OPT="$OPT" EMBED="$EMBED" NBLK="$NBLK" NHEAD="$NHEAD" NREG="$NREG" \
   .venv/bin/python eval_downstream.py small datasets/single_cell/frangieh.h5ad "$CKPT" "fr_${TAG}"
 echo "=== EVAL Papalexi ==="
-NS=200 OPT=adamw EMBED="$EMBED" NBLK="$NBLK" NHEAD="$NHEAD" NREG="$NREG" \
+NS=200 OPT="$OPT" EMBED="$EMBED" NBLK="$NBLK" NHEAD="$NHEAD" NREG="$NREG" \
   .venv/bin/python eval_downstream.py small datasets/single_cell/papalexi.h5ad "$CKPT" "pa_${TAG}"
 echo "=== $V ${ARCH:-small} DONE ==="

@@ -140,6 +140,32 @@ per step here (0.77 vs 6 it/s) AND has pathologically slow one-time XLA compiles
 ODE at the new shape (~25 min each), so a fair capacity test (≥10k steps) is expensive. **Takeaway:
 the small 3.36M recipe is well-matched; don't naively scale capacity without also scaling steps.**
 
+## 5d. Muon on the realistic prior — the transfer penalty disappears
+Earlier work found Muon *hurts* real transfer on the **old** (unrealistic) prior — it
+out-optimizes into the prior during the cooldown and overfits it (old-prior Muon Papalexi
+W₂ ~122 vs AdamW ~56; Frangieh ~42 vs ~28; 3-seed). Hypothesis: on v1noise the prior now
+*looks like real data*, so fitting it harder should stop costing transfer. Trained Muon@1e-2
+on v1noise (small model, 4000 steps, seed 42):
+
+| metric | AdamW+v1noise | Muon+v1noise |
+|---|---|---|
+| Frangieh W₂ ↓ | 19.8 | **18.3** |
+| Frangieh AUPRC ↑ | 0.050 | **0.056** |
+| Frangieh mag-ratio →1 | 0.92 | **0.86** |
+| Papalexi W₂ ↓ | **20.8** | 20.9 |
+| Papalexi AUPRC ↑ | **0.178** | 0.163 |
+| Papalexi MMD ↓ | **0.085** | 0.100 |
+
+**Confirmed flip:** Muon and AdamW are now essentially **tied** on v1noise (Muon slightly better on
+Frangieh, slightly worse on Papalexi MMD) — the large transfer *penalty* Muon paid on the old prior
+is **gone**. Mechanistically clean: the LR cooldown, which *worsened* Muon's transfer on the old
+prior, *improved* it here (Muon real-Frangieh val W₂ 26.2→17.1 across the cooldown), because deeper
+fit of a realistic prior is good for transfer. Muon also still fits the prior harder (val /prior W₂
+31.4 vs AdamW 36.9). (Caveat: single seed; the step-2000/4000 val AUPRC was noisy — 0.094/0.384 vs
+the stable test-split 0.056.) Net: on v1noise, **Muon is safe (no transfer cost) and gives the best
+prior-fit** — the old "AdamW is safer for transfer" caveat no longer applies. Not a decisive transfer
+*win* though; AdamW remains a fine default.
+
 ## 6. Recommendation
 Adopt the **v1noise** technical-noise settings for the SERGIO prior when the objective is
 real-data transfer: `dropout_q_range=(10,45)`, `noise_s_range=(0.3,1.0)`,

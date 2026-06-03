@@ -1,0 +1,35 @@
+Muon@1e-2 on v1noise prior, small model, 4000 steps, seed42
+=== fr_v1noise_s42_muon ===
+{
+  "test/mean_rmse": 0.24618367850780487,
+  "test/var_rmse": 0.2634643614292145,
+  "test/mean_r2": 0.9881626963615417,
+  "test/var_r2": 0.6082084774971008,
+  "test/wasserstein": 18.343305587768555,
+  "test/mmd": 0.05453957989811897,
+  "test/deg_auprc": 0.056086961179971695,
+  "test/wasserstein_mag_ratio": 0.8618329167366028,
+  "test/pds": 0.2566666603088379,
+  "_which": "small",
+  "_dataset": "datasets/single_cell/frangieh.h5ad",
+  "_ckpt": "outputs/prior_v1noise_s42_muon/model.ckpt",
+  "_seed": 42,
+  "_limit": 999
+}
+=== pa_v1noise_s42_muon ===
+{
+  "test/mean_rmse": 0.39595139026641846,
+  "test/var_rmse": 0.2420760691165924,
+  "test/mean_r2": 0.9813872575759888,
+  "test/var_r2": 0.7115390300750732,
+  "test/wasserstein": 20.90859031677246,
+  "test/mmd": 0.1002722978591919,
+  "test/deg_auprc": 0.16283543407917023,
+  "test/wasserstein_mag_ratio": 1.24964439868927,
+  "test/pds": 0.43939393758773804,
+  "_which": "small",
+  "_dataset": "datasets/single_cell/papalexi.h5ad",
+  "_ckpt": "outputs/prior_v1noise_s42_muon/model.ckpt",
+  "_seed": 42,
+  "_limit": 999
+}
