@@ -166,6 +166,28 @@ the stable test-split 0.056.) Net: on v1noise, **Muon is safe (no transfer cost)
 prior-fit** — the old "AdamW is safer for transfer" caveat no longer applies. Not a decisive transfer
 *win* though; AdamW remains a fine default.
 
+## 5e. 11M + Muon — capacity finally pays off (best config)
+The 11M+AdamW run (§5c) underwhelmed because it was *undertrained* at 4000 steps. Muon is a
+faster optimizer and (§5d) carries no transfer penalty on v1noise — so it's the natural fix.
+Re-ran the 11M model with Muon@1e-2 (v1noise, 4000 steps, seed 42). Full grid (test-split):
+
+| metric | small+AdamW | small+Muon | 11M+AdamW | **11M+Muon** |
+|---|---|---|---|---|
+| Frangieh W₂ ↓ | 19.8 | 18.3 | 20.7 | **17.8** |
+| Frangieh AUPRC ↑ | 0.050 | 0.056 | 0.042 | **0.081** |
+| Frangieh mag-ratio →1 | 0.92 | 0.86 | 0.92 | **0.83** |
+| Papalexi W₂ ↓ | **20.8** | 20.9 | 28.5 | 21.1 |
+| Papalexi AUPRC ↑ | **0.178** | 0.163 | 0.171 | 0.162 |
+
+**11M+Muon is the best overall configuration.** It wins Frangieh on W₂ *and* AUPRC (0.081, the
+highest of any config — vs ~0.05 elsewhere) and recovers Papalexi to small-model level (W₂ 21.1 vs
+the broken 28.5 of 11M+AdamW). The trace confirms the mechanism: Muon converged the 11M model far
+faster (step-2000 val W₂ 30.1 vs 11M+AdamW's 37.7), and the cooldown pushed it to a best-in-class
+16.8 val W₂ → **the capacity payoff that AdamW left undertrained was unlocked by the faster optimizer.**
+Caveat: single seed; W₂ (stable) clearly improved, AUPRC 0.081 vs ~0.05 is suggestive but should be
+seed-averaged. Best recipe to date: **v1noise prior + 11M model + Muon@1e-2.** AUPRC still ≪ paper
+0.34 (the eval-resampling artifact, §5b), but this is the highest single-config AUPRC we've reached.
+
 ## 6. Recommendation
 Adopt the **v1noise** technical-noise settings for the SERGIO prior when the objective is
 real-data transfer: `dropout_q_range=(10,45)`, `noise_s_range=(0.3,1.0)`,
