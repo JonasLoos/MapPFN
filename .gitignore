@@ -172,3 +172,5 @@ perturbench_data
 /condot
 /logs
 /data
+# local plotting working dir (logs/jsons pulled from cluster)
+_plotdata/
