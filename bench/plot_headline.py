@@ -37,7 +37,9 @@ def parse_train_log(path: Path):
     # epoch*EPOCH_LEN + N. EPOCH_LEN is read from the bar ("N/<EPOCH_LEN>").
     text = path.read_text(errors="replace").replace("\r", "\n")
     num = r"([-\d.eE+]+)"
-    by_step = {}     # true_step -> (loss, lr)
+    loss_by_step = {}  # true_step -> last loss
+    lr_by_step = {}     # true_step -> MAX lr (the bar logs lr=0.000 on validation
+                        # repaints and sub-resolution steps; max recovers the real value)
     val_rows = {}    # true_step -> dict (first time each val-tuple appears)
     seen_val = set()
     epoch = 0
@@ -55,7 +57,9 @@ def parse_train_log(path: Path):
         tl = re.search(r"train/loss=" + num, line)
         lr = re.search(r"train/lr=" + num, line)
         try:
-            by_step[step] = (float(tl.group(1)), float(lr.group(1)) if lr else np.nan)
+            loss_by_step[step] = float(tl.group(1))
+            if lr:
+                lr_by_step[step] = max(lr_by_step.get(step, -1.0), float(lr.group(1)))
         except (ValueError, AttributeError):
             pass
         if "val/wasserstein/prior=" in line:
@@ -68,9 +72,9 @@ def parse_train_log(path: Path):
                 if key not in seen_val:
                     seen_val.add(key)
                     val_rows[step] = {k: float(v.group(1)) for k, v in m.items()}
-    steps = np.array(sorted(by_step))
-    tloss = np.array([by_step[s][0] for s in steps])
-    tlr = np.array([by_step[s][1] for s in steps])
+    steps = np.array(sorted(loss_by_step))
+    tloss = np.array([loss_by_step[s] for s in steps])
+    tlr = np.array([lr_by_step.get(s, np.nan) for s in steps])
     vsteps = np.array(sorted(val_rows))
     vals = {k: np.array([val_rows[s][k] for s in vsteps])
             for k in next(iter(val_rows.values()))}
@@ -89,7 +93,17 @@ fig.suptitle(
     fontsize=12, fontweight="bold",
 )
 
-COOLDOWN_START = 7000  # WSD decay_frac=0.3 over 10k micro-steps
+# IMPORTANT: the logged `train/lr` (line 122 in jax_lightning.py) evaluates the schedule
+# at `global_step` = MICRO-steps, but the schedule's total_steps was sized in OPTIMIZER
+# UPDATES (=num_steps/accum). Under accum>1 the optimizer is wrapped in MultiSteps, so the
+# APPLIED lr advances once per accum micro-steps. => the logged lr is horizontally
+# compressed by `accum` (appears to hit 0 at step 5000), but the lr actually applied to
+# the weights decays over the full run. Reconstruct the true applied lr = logged(step/accum).
+ACCUM = 2
+true_lr = np.interp(steps / ACCUM, steps, np.nan_to_num(tlr, nan=0.0))
+PEAK = np.nanmax(tlr) if np.isfinite(tlr).any() else 0.01
+_decaying = steps[(true_lr < 0.99 * PEAK) & (steps > 500)]
+COOLDOWN_START = int(_decaying.min()) if len(_decaying) else 7000   # ~7000 (last 30%)
 
 
 def labelpts(ax, xs, ys, fmt="{:.3f}", dy=0.0, color="k"):
@@ -99,7 +113,7 @@ def labelpts(ax, xs, ys, fmt="{:.3f}", dy=0.0, color="k"):
 
 
 def cooldown_span(ax):
-    ax.axvspan(COOLDOWN_START, 10000, color="orange", alpha=0.08)
+    ax.axvspan(COOLDOWN_START, 10000, color="orange", alpha=0.10)   # true WSD cooldown
 
 
 # (a) train loss + LR
@@ -116,11 +130,15 @@ a.set_ylabel("flow-matching loss", color="C0")
 a.set_ylim(0.6, 1.8)
 a.set_title("(a) training loss + LR schedule")
 a2 = a.twinx()
-a2.plot(steps, tlr, color="C3", lw=1.2, ls="--", label="train/lr")
+a2.plot(steps, true_lr, color="C3", lw=1.6, ls="--", label="train/lr (applied)")
+a2.plot(steps, tlr, color="C3", lw=0.8, ls=":", alpha=0.45,
+        label="train/lr (logged — accum artifact)")
 a2.set_ylabel("learning rate", color="C3")
+a2.set_ylim(0, PEAK * 1.15)
 cooldown_span(a)
-a.text(8500, 1.68, "WSD\ncooldown", ha="center", color="darkorange", fontsize=8)
-a.legend(loc="upper right", fontsize=8)
+a.text((COOLDOWN_START + 10000) / 2, 1.68, "WSD\ncooldown", ha="center",
+       color="darkorange", fontsize=8)
+a.legend(loc="upper left", fontsize=7)
 
 # (b) val loss: prior vs real-Frangieh
 b = ax[0, 1]
@@ -151,10 +169,12 @@ labelpts(d, vsteps, vals["val/deg_auprc"], dy=-16, color="C1")
 cooldown_span(d)
 d.set_xlabel("micro-step"); d.set_ylabel("DEG AUPRC  ↑")
 d.set_title("(d) DE-gene recovery (AUPRC)"); d.legend(fontsize=8); d.grid(alpha=0.3)
-d.text(0.5, -0.30,
-       "Cooldown (orange) deepens the SERGIO-prior fit (prior AUPRC ↑, prior loss ↓) "
-       "but real-Frangieh W₂/AUPRC do NOT improve\n— the prior-vs-transfer tradeoff. "
-       "Only mid (~5k) + final (10k) validations were logged this run.",
+d.text(0.5, -0.32,
+       "The WSD cooldown (orange, true applied LR over steps 7k-10k) deepens the SERGIO-prior "
+       "fit (prior AUPRC ↑, loss ↓)\nwhile real-Frangieh W₂/AUPRC do NOT improve — the "
+       "prior-vs-transfer tradeoff. (The logged train/lr is compressed ×accum, a display-only\n"
+       "artifact of jax_lightning.py:122; the applied LR is correct. Only mid + final "
+       "validations were logged.)",
        transform=d.transAxes, ha="center", va="top", fontsize=8, color="0.3")
 
 fig.tight_layout(rect=[0, 0, 1, 0.96])
