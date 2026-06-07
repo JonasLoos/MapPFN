@@ -128,6 +128,11 @@ LossConfig = builds(eqx.Partial, fm_loss)
 LRScheduleConfig = builds(
     warmup_stable_decay_schedule,
     peak_value=1e-4,
+    # total_steps is in OPTIMIZER UPDATES. The clean base uses gradient_accumulation_steps=1,
+    # so this == num_steps (micro-steps). CAVEAT: at accum>1 the optimizer is wrapped in
+    # optax.MultiSteps and advances once per `accum` micro-steps, so the schedule would only
+    # reach num_steps/accum updates -> the WSD decay never fires. If you ever set accum>1,
+    # override total_steps = num_steps // accum (bench/run_full.sh's SCHED_TOTAL does this).
     total_steps="${globals: num_steps}",
     warmup_frac=0.01,
     decay_frac=0.2,

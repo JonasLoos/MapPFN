@@ -119,7 +119,11 @@ class JaxLightningModule(LightningModule):
         metrics = {f"{split}/loss": loss.item()}
 
         if split == SplitNames.TRAIN:
-            metrics[f"{split}/lr"] = self.lr_schedule(self.global_step).item()
+            # The schedule is sized in OPTIMIZER UPDATES; under accum>1 the optimizer (wrapped
+            # in MultiSteps) advances once per `accum` micro-steps, while global_step counts
+            # micro-steps. Divide so the LOGGED lr matches the lr actually applied. No-op at accum=1.
+            update_count = self.global_step // self.gradient_accumulation_steps
+            metrics[f"{split}/lr"] = self.lr_schedule(update_count).item()
             metrics[f"{split}/global_step"] = self.global_step
         elif split == SplitNames.VAL:
             self.sample_key, sample_key = jr.split(self.sample_key)
@@ -228,7 +232,9 @@ class JaxLightningModule(LightningModule):
         if self.optimizer_name == "muon":
             from map_pfn.train.muon import muon_adamw
 
-            optimizer = muon_adamw(self.lr_schedule, adam_b1=self.b1, adam_b2=self.b2)
+            optimizer = muon_adamw(
+                self.lr_schedule, adam_b1=self.b1, adam_b2=self.b2, weight_decay=self.weight_decay
+            )
         else:
             optimizer = optax.adamw(
                 self.lr_schedule,

@@ -14,7 +14,11 @@ def _seed_worker(_worker_id: int) -> None:
     """Re-seed each DataLoader worker's dataset RNG. Workers are forked copies that share
     the parent's `self.rng` state, so without this they draw an identical sampling stream
     at num_workers>0 -> correlated/duplicate batches -> collapsed training diversity. PyTorch
-    gives each worker a unique per-epoch `info.seed`; use it for an independent stream."""
+    gives each worker a unique per-epoch `info.seed`; use it for an independent stream.
+
+    TRAIN-LOADER ONLY. Do NOT attach to val/test/predict loaders: there it would override
+    the rng that `set_predict_seed` installs for reproducible baseline resampling (and, with
+    no fixed Generator, `info.seed` is uncontrolled) -> non-reproducible eval at num_workers>0."""
     info = get_worker_info()
     if info is not None and hasattr(info.dataset, "rng"):
         info.dataset.rng = np.random.default_rng(info.seed)
@@ -136,7 +140,6 @@ class DataModule(LightningDataModule):
             "persistent_workers": self.persistent_workers,
             "collate_fn": self._collate_fn,
             "drop_last": False,
-            "worker_init_fn": _seed_worker,
         }
 
         if self.add_prior:
@@ -155,7 +158,6 @@ class DataModule(LightningDataModule):
             "persistent_workers": self.persistent_workers,
             "collate_fn": self._collate_fn,
             "drop_last": False,
-            "worker_init_fn": _seed_worker,
         }
 
         if self.add_prior:

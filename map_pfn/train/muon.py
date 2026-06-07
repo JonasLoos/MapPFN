@@ -50,11 +50,16 @@ def muon_adamw(
     eps: float = 1e-8,
     ns_steps: int = 5,
     nesterov: bool = True,
+    weight_decay: float = 0.0,
 ) -> optax.GradientTransformation:
-    """Muon for 2-D params, AdamW for the rest. Weight decay handled in the outer chain.
+    """Muon for 2-D params, AdamW for the rest.
 
     ``learning_rate`` is the base LR; the Muon branch additionally scales each
     update by ``sqrt(max(1, rows/cols))`` so its RMS matches across shapes.
+    ``weight_decay`` applies optax-AdamW-style DECOUPLED weight decay to ALL params
+    (both Muon- and Adam-routed): update += -lr * wd * param, matching ``optax.adamw``
+    (which adds ``wd*param`` to the update before the ``-lr`` scaling). It needs the
+    params, which optax threads into ``update`` via the outer chain.
     """
     lr_fn = learning_rate if callable(learning_rate) else (lambda _: learning_rate)
 
@@ -63,13 +68,13 @@ def muon_adamw(
         nu = jax.tree.map(jnp.zeros_like, params)
         return MuonState(count=jnp.zeros([], jnp.int32), mu=mu, nu=nu)
 
-    def update(grads, state, params=None):  # noqa: ARG001
+    def update(grads, state, params=None):
         count = state.count + 1
         lr = lr_fn(state.count)
         b1c = 1.0 - adam_b1**count
         b2c = 1.0 - adam_b2**count
 
-        def per_leaf(g, m, v):
+        def per_leaf(g, m, v, p):
             if g.ndim == 2:
                 m_new = muon_momentum * m + g
                 buf = g + muon_momentum * m_new if nesterov else m_new
@@ -81,9 +86,13 @@ def muon_adamw(
                 m_new = adam_b1 * m + (1.0 - adam_b1) * g
                 v_new = adam_b2 * v + (1.0 - adam_b2) * (g * g)
                 upd = (m_new / b1c) / (jnp.sqrt(v_new / b2c) + eps)
-            return -lr * upd, m_new, v_new
+            wd = weight_decay * p if (weight_decay != 0.0 and p is not None) else 0.0
+            return -lr * (upd + wd), m_new, v_new
 
-        out = jax.tree.map(per_leaf, grads, state.mu, state.nu)
+        # params aligns 1:1 with grads (same eqx pytree); fall back to grads when the
+        # outer chain doesn't supply params (e.g. weight_decay=0 / standalone use).
+        p_tree = params if params is not None else grads
+        out = jax.tree.map(per_leaf, grads, state.mu, state.nu, p_tree)
         is_tup = lambda x: isinstance(x, tuple)  # noqa: E731
         updates = jax.tree.map(lambda x: x[0], out, is_leaf=is_tup)
         mu_new = jax.tree.map(lambda x: x[1], out, is_leaf=is_tup)
