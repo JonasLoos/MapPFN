@@ -14,8 +14,22 @@ STEPS="${3:-6000}"
 # model doesn't collide with the small-model JSONs. cond_dim = EMBED.
 EMBED="${EMBED:-128}"; NBLK="${NBLK:-4}"; NHEAD="${NHEAD:-4}"; NREG="${NREG:-4}"
 BS="${BS:-64}"; LR="${LR:-3e-3}"; ARCH="${ARCH:-}"; OPT="${OPT:-adamw}"  # OPT=muon -> set LR=1e-2
+# headline-run knobs: ACCUM=gradient_accumulation_steps, TRAINNS=training num_samples
+# (cells/condition; must be <= cells/cond in the prior file), VAL_INT=val_check_interval
+# (=> checkpoint cadence, since Checkpointer saves model.ckpt on every validation_end).
+ACCUM="${ACCUM:-1}"; TRAINNS="${TRAINNS:-100}"; VAL_INT="${VAL_INT:-2000}"
+# NW=DataLoader num_workers. At full prior scale (27GB, ns=200) the per-sample in-context
+# assembly is the bottleneck with num_workers=0 (~1.4 it/s); NW=3 parallelizes it (workers
+# COW-share the in-RAM adata, ~no extra mem). persistent_workers on iff NW>0.
+NW="${NW:-0}"; PW=$([ "${NW}" -gt 0 ] && echo true || echo false)
+# CRITICAL accum fix: num_steps counts MICRO-BATCHES (global_step++ per training_step),
+# but the LR-schedule count lives inside the optimizer, which is wrapped in
+# optax.MultiSteps(every_k=ACCUM) and so advances only once per ACCUM micro-batches.
+# So the schedule must span STEPS/ACCUM optimizer-updates, else the WSD cooldown
+# (last decay_frac) never fires at accum>1. (=STEPS when ACCUM=1, i.e. no-op there.)
+SCHED_TOTAL=$(( STEPS / ACCUM ))
 SUF="${ARCH:+_$ARCH}"
-PRIOR="datasets/synthetic/sergio_${V}.h5ad"
+PRIOR="${PRIOR:-datasets/synthetic/sergio_${V}.h5ad}"
 RUNDIR="outputs/prior_${V}_s${SEED}${SUF}"
 TAG="${V}_s${SEED}${SUF}"
 
@@ -23,22 +37,22 @@ export PYTHONPATH=/workdir PYTHONUNBUFFERED=1
 export XLA_FLAGS=--xla_cpu_use_thunk_runtime=false
 export JAX_COMPILATION_CACHE_DIR=/workdir/.jax_cache
 
-echo "=== TRAIN $V seed=$SEED steps=$STEPS arch=${EMBED}/${NBLK}blk/${NHEAD}h/${NREG}reg bs=$BS lr=$LR prior=$PRIOR ==="
+echo "=== TRAIN $V seed=$SEED steps=$STEPS(micro) accum=$ACCUM updates=$SCHED_TOTAL ns=$TRAINNS arch=${EMBED}/${NBLK}blk/${NHEAD}h/${NREG}reg bs=$BS opt=$OPT lr=$LR prior=$PRIOR ==="
 .venv/bin/python map_pfn/scripts/train.py \
   cfg=map_pfn_rna cfg/datamodule=frangieh \
   cfg.datamodule.prior_dataset_path="$PRIOR" \
-  cfg.datamodule.dataset.num_samples=100 \
+  cfg.datamodule.dataset.num_samples="$TRAINNS" \
   cfg.datamodule.batch_size="$BS" \
-  cfg.datamodule.num_workers=0 cfg.datamodule.persistent_workers=false \
+  cfg.datamodule.num_workers="$NW" cfg.datamodule.persistent_workers="$PW" \
   cfg.module.model.decoder.embed_dim="$EMBED" cfg.module.model.decoder.cond_dim="$EMBED" \
   cfg.module.model.decoder.num_heads="$NHEAD" cfg.module.model.decoder.num_blocks="$NBLK" \
   cfg.module.model.decoder.num_reg_tokens="$NREG" cfg.module.model.cond_dim="$EMBED" \
-  cfg.module.gradient_accumulation_steps=1 cfg.module.optimizer_name="$OPT" \
+  cfg.module.gradient_accumulation_steps="$ACCUM" cfg.module.optimizer_name="$OPT" \
   cfg.module.lr_schedule.peak_value="$LR" cfg.module.lr_schedule.decay_frac=0.3 \
-  cfg.module.lr_schedule.warmup_frac=0.02 \
+  cfg.module.lr_schedule.warmup_frac=0.02 cfg.module.lr_schedule.total_steps="$SCHED_TOTAL" \
   cfg.module.eval_solver=euler cfg.module.step_size=0.1 \
   cfg.globals.num_steps="$STEPS" cfg.seed="$SEED" \
-  cfg.trainer.val_check_interval=2000 cfg.trainer.limit_val_batches=2 \
+  cfg.trainer.val_check_interval="$VAL_INT" cfg.trainer.limit_val_batches=2 \
   +cfg.trainer.num_sanity_val_steps=0 \
   hydra.run.dir="$RUNDIR"
 
@@ -47,9 +61,9 @@ echo "=== ckpt: $CKPT ==="
 ls -la "$CKPT"
 
 echo "=== EVAL Frangieh ==="
-NS=200 OPT="$OPT" EMBED="$EMBED" NBLK="$NBLK" NHEAD="$NHEAD" NREG="$NREG" \
+NS=200 OPT="$OPT" ACCUM="$ACCUM" EMBED="$EMBED" NBLK="$NBLK" NHEAD="$NHEAD" NREG="$NREG" \
   .venv/bin/python eval_downstream.py small datasets/single_cell/frangieh.h5ad "$CKPT" "fr_${TAG}"
 echo "=== EVAL Papalexi ==="
-NS=200 OPT="$OPT" EMBED="$EMBED" NBLK="$NBLK" NHEAD="$NHEAD" NREG="$NREG" \
+NS=200 OPT="$OPT" ACCUM="$ACCUM" EMBED="$EMBED" NBLK="$NBLK" NHEAD="$NHEAD" NREG="$NREG" \
   .venv/bin/python eval_downstream.py small datasets/single_cell/papalexi.h5ad "$CKPT" "pa_${TAG}"
 echo "=== $V ${ARCH:-small} DONE ==="

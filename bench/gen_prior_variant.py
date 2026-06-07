@@ -100,10 +100,14 @@ def main() -> None:
     variant = sys.argv[1]
     n_ctx = int(sys.argv[2]) if len(sys.argv) > 2 else 1000
     num_samples = int(sys.argv[3]) if len(sys.argv) > 3 else 100
+    # optional 4th arg = output basename (no extension); defaults to sergio_<variant>.
+    # lets a re-generation at a different scale (e.g. full 6000-ctx/ns200) avoid
+    # clobbering the small factorial file sergio_<variant>.h5ad.
+    out_name = sys.argv[4] if len(sys.argv) > 4 else f"sergio_{variant}"
     if variant not in VARIANTS:
         raise SystemExit(f"variant must be one of {list(VARIANTS)}")
 
-    out = Path("datasets/synthetic") / f"sergio_{variant}.h5ad"
+    out = Path("datasets/synthetic") / f"{out_name}.h5ad"
     out.parent.mkdir(parents=True, exist_ok=True)
 
     overrides = VARIANTS[variant]
@@ -127,6 +131,7 @@ def main() -> None:
     context_ids = np.concatenate([b[BatchKeys.CONTEXT_ID] for b in batches])
     treatments = np.concatenate([b[BatchKeys.TREATMENT] for b in batches])
     data = np.concatenate([b[BatchKeys.DATA] for b in batches])
+    del batches  # free ~12GB of per-batch buffers before building/normalizing the 61M-cell AnnData
 
     _, ns, ng = data.shape
     X = data.reshape(-1, ng)

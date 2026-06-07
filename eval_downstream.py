@@ -49,7 +49,7 @@ if which == "small":
         num_heads=nh, num_blocks=nb, num_reg_tokens=nr, key=builds(jr.key, seed),
     )
     model_cfg = MapPFNConfig(decoder=mmdit, in_dim=num_nodes, cond_dim=ed, key=builds(jr.key, seed))
-    accum = 1
+    accum = int(os.environ.get("ACCUM", "1"))  # must match the ckpt's training accum (opt_state structure)
 elif which == "official":
     mmdit = MMDiTConfig(noise_dim=num_nodes, key=builds(jr.key, seed))  # defaults = paper arch
     model_cfg = MapPFNConfig(decoder=mmdit, in_dim=num_nodes, key=builds(jr.key, seed))
@@ -75,6 +75,13 @@ datamodule = instantiate(
     )
 )
 module.load_checkpoint(ckpt)
+
+# USE_RAW=1 evaluates the raw (non-EMA) weights instead of the EMA model. Used to
+# isolate the EMA-vs-accum bug: if the raw model evals much better than the EMA model
+# for an accum>1 checkpoint, the degraded EMA (squared decay) was the culprit.
+if os.environ.get("USE_RAW") == "1":
+    module.ema_model = module.model
+    print("[info] USE_RAW=1: evaluating raw (non-EMA) weights", flush=True)
 
 datamodule.num_workers = 0
 if hasattr(datamodule, "persistent_workers"):

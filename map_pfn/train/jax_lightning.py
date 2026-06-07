@@ -110,6 +110,8 @@ class JaxLightningModule(LightningModule):
             self.ema,
             train_key,
             self.model_sharding,
+            jax.numpy.asarray(self.global_step_),
+            self.gradient_accumulation_steps,
         )
         self.ema_model = eqx.combine(self.ema_state.ema, eqx.filter(self.model, eqx.is_array, inverse=True))
         obs_data, int_data, obs_data_cond, int_data_cond, treatment = aux
@@ -266,6 +268,8 @@ class JaxLightningModule(LightningModule):
         ema: optax.GradientTransformation,
         key: PRNGKeyArray,
         model_sharding: jshard.NamedSharding,
+        step: Array,
+        accum: int,
     ) -> tuple[Array, tuple, eqx.Module, optax.OptState, optax.EmaState]:
         """Perform one optimization step using computed gradients.
 
@@ -293,7 +297,13 @@ class JaxLightningModule(LightningModule):
         (loss, aux), grads = loss_fn(model, batch=batch, key=key)
         updates, opt_state = optimizer.update(grads, opt_state, model)
         model = eqx.apply_updates(model, updates)
-        _, ema_state = ema.update(eqx.filter(model, eqx.is_array), ema_state)
+        # Update EMA only on micro-steps where the optimizer actually applied an update
+        # (every `accum`-th, under optax.MultiSteps). On the other micro-steps the model is
+        # unchanged, so EMA-ing there squares the effective decay and pollutes it with stale
+        # duplicate states -> a degraded ema_model (which is what eval uses). No-op at accum=1.
+        new_ema, new_ema_state = ema.update(eqx.filter(model, eqx.is_array), ema_state)
+        applied = (step % accum) == (accum - 1)
+        ema_state = jax.tree.map(lambda n, o: jax.numpy.where(applied, n, o), new_ema_state, ema_state)
 
         model, opt_state, ema_state = eqx.filter_shard((model, opt_state, ema_state), model_sharding)
         return loss, aux, model, opt_state, ema_state

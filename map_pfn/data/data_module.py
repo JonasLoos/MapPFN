@@ -4,10 +4,20 @@ import anndata as ad
 import numpy as np
 from hydra_zen.typing import Partial
 from lightning import LightningDataModule
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, get_worker_info
 
 from map_pfn.data.utils import collate_fn as default_collate_fn
 from map_pfn.data.utils import split_dataset
+
+
+def _seed_worker(_worker_id: int) -> None:
+    """Re-seed each DataLoader worker's dataset RNG. Workers are forked copies that share
+    the parent's `self.rng` state, so without this they draw an identical sampling stream
+    at num_workers>0 -> correlated/duplicate batches -> collapsed training diversity. PyTorch
+    gives each worker a unique per-epoch `info.seed`; use it for an independent stream."""
+    info = get_worker_info()
+    if info is not None and hasattr(info.dataset, "rng"):
+        info.dataset.rng = np.random.default_rng(info.seed)
 
 
 class DataModule(LightningDataModule):
@@ -115,6 +125,7 @@ class DataModule(LightningDataModule):
             collate_fn=self._collate_fn,
             drop_last=self.drop_last,
             shuffle=True,
+            worker_init_fn=_seed_worker,
         )
 
     def val_dataloader(self) -> DataLoader | list[DataLoader]:
@@ -125,6 +136,7 @@ class DataModule(LightningDataModule):
             "persistent_workers": self.persistent_workers,
             "collate_fn": self._collate_fn,
             "drop_last": False,
+            "worker_init_fn": _seed_worker,
         }
 
         if self.add_prior:
@@ -143,6 +155,7 @@ class DataModule(LightningDataModule):
             "persistent_workers": self.persistent_workers,
             "collate_fn": self._collate_fn,
             "drop_last": False,
+            "worker_init_fn": _seed_worker,
         }
 
         if self.add_prior:

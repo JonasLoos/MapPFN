@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from lightning.pytorch.loggers import WandbLogger
 
 from map_pfn.utils.config import run
@@ -23,9 +25,13 @@ def train(cfg: TrainingRun) -> None:
             cfg.module.load_checkpoint(path)
 
     trainer.fit(cfg.module, datamodule=cfg.datamodule)
-    trainer.test(cfg.module, datamodule=cfg.datamodule)
 
-    evaluate_baselines(datamodule=cfg.datamodule, seed=cfg.seed)
+    # SKIP_EVAL=1 skips the post-fit synthetic test + classical baselines. Used for
+    # intermediate windows of a checkpoint-resumed run (real-data eval is run
+    # separately via eval_downstream.py once the WSD cooldown has completed).
+    if os.environ.get("SKIP_EVAL") != "1":
+        trainer.test(cfg.module, datamodule=cfg.datamodule)
+        evaluate_baselines(datamodule=cfg.datamodule, seed=cfg.seed)
 
 
 if __name__ == "__main__":

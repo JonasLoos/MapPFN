@@ -182,7 +182,13 @@ def assign_split(
     control_mask = adata.obs[ColumnNames.TREATMENT] == Values.CONTROL
     holdout_mask = adata.obs[ColumnNames.CONTEXT] == holdout_context
 
-    cond = adata.obs[[ColumnNames.CONTEXT, ColumnNames.TREATMENT]].apply(tuple, axis=1)
+    # Vectorized (context, treatment) key. apply(tuple, axis=1) is row-wise Python and
+    # pathologically slow at full prior scale (~20 min on 61M rows); a \x1f-delimited string
+    # key is 1:1 with the tuple (identical drop_duplicates order + isin/train_test_split
+    # result) but ~100x faster. \x1f (unit separator) cannot occur in gene/context names.
+    cond = adata.obs[ColumnNames.CONTEXT].astype(str).str.cat(
+        adata.obs[ColumnNames.TREATMENT].astype(str), sep="\x1f"
+    )
 
     unique_cond = cond[~control_mask & ~holdout_mask].drop_duplicates()
     holdout_cond = cond[~control_mask & holdout_mask].drop_duplicates()
@@ -193,7 +199,7 @@ def assign_split(
     adata.obs.loc[control_mask, ColumnNames.SPLIT] = SplitNames.CONTROL
 
     if len(unique_cond) > 0:
-        unique_contexts = unique_cond.apply(lambda x: x[0])
+        unique_contexts = unique_cond.str.split("\x1f").str[0]
         train_cond, val_cond = train_test_split(
             unique_cond, test_size=val_share, random_state=seed, stratify=unique_contexts
         )

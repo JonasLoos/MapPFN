@@ -195,3 +195,48 @@ real-data transfer: `dropout_q_range=(10,45)`, `noise_s_range=(0.3,1.0)`,
 (2-seed confirmed, both datasets). Do NOT pursue DAG-effect or DEG-breadth changes — tested,
 they don't help. For the AUPRC gap specifically, use the paper's 10-seed eval resampling, not a
 prior change. Next: validate v1noise at full prior scale (6000 ctx) + larger model.
+
+## 7. Headline run — full paper-scale v1noise + longer training (2026-06-03, in progress)
+Everything above used a **1000-context** prior and **4000** steps. To make a serious, paper-comparable
+claim we re-do the two best configs at **full paper scale**: prior = v1noise at **6000 contexts ×
+ns=200** (`sergio_v1noise_full.h5ad`, 61.2M cells, ~27GB; same train/val/test split structure as the
+official `sergio.h5ad`), trained much longer. Two configs, same recipe:
+- optimizer **Muon@1e-2**; **bs=32 + grad-accum=2** (effective batch 64, matching the eff-batch of the
+  §5e winner but feasible at ns=200, which OOMs at bs=64); WSD schedule (warmup 0.02 / decay 0.3).
+- **Phase 1:** small 3.36M (128/4/4/4), **10 000** micro-steps (= 5 000 optimizer updates).
+- **Phase 2:** 11M (192/6/6/6), **20 000** micro-steps (= 10 000 updates).
+
+**Accum/cooldown fix (important):** `num_steps` counts micro-batches, but the LR-schedule counter
+lives inside the optimizer, which is wrapped in `optax.MultiSteps(every_k=accum)` and so advances
+once per `accum` micro-batches. With `total_steps` left at `num_steps`, accum=2 would only reach 50%
+of the schedule and the **cooldown would never fire**. Fix: set `lr_schedule.total_steps =
+num_steps/accum`. (Verified empirically; no-op at accum=1, so the whole §1–6 factorial was unaffected.)
+
+Differences vs the official paper run: ~40× the data of our earlier runs but ~5× fewer optimizer
+updates than the paper's 400k-step / accum-8 run; effective batch 64 vs the paper's 256; otherwise
+the v1noise prior (vs the paper's default-noise prior) is the intended difference.
+
+### Results (zero-shot test-split, NS=200)
+Baselines for reference: official ~43M = Fr W₂ 22.7 / MMD 0.022 / AUPRC 0.141, Pa W₂ 44.2 / mag 2.62;
+best small-scale config (§5e, 11M+Muon, 1000-ctx) = Fr W₂ 17.8 / AUPRC 0.081, Pa W₂ 21.1; paper AUPRC 0.34 (10-seed).
+
+| config | Fr W₂ ↓ | Fr MMD ↓ | Fr AUPRC ↑ | Fr mag→1 | Pa W₂ ↓ | Pa MMD ↓ | Pa AUPRC ↑ | Pa mag→1 |
+|---|---|---|---|---|---|---|---|---|
+| 3.36M full @10k (`hl3m`, buggy NW=3) | 24.6 | 0.064 | 0.044 | 1.15 | 36.3 | 0.160 | 0.225 | 2.33 |
+| 3.36M full @10k (`hl3mv2`, RNG+EMA fix) | 26.0 | 0.072 | 0.036 | 1.18 | 29.5 | 0.116 | 0.184 | 1.81 |
+| 11M full @20k | _never launched (session ended)_ | | | | | | | |
+
+**Outcome — full scale did NOT beat the 1000-ctx factorial for the 3.36M model (2026-06-05).**
+The first full run (`hl3m`) used `num_workers=3` and hit a shared-RNG bug (forked workers draw an
+identical sampling stream → correlated batches). The fixed re-run (`hl3mv2`: `worker_init_fn`
+re-seeding + EMA-gating under accum>1) **only partially recovered**: Papalexi improved markedly
+(W₂ 36.3→29.5, magnitude overshoot 2.33→1.81), but **Frangieh did not** (W₂ 26.0, slightly worse
+than the buggy run, and far from the 1000-ctx §5e Fr W₂ 17.8). Training itself was healthy — the
+cooldown fired (val prior loss 1.040→0.934) and the SERGIO-prior fit was strong (val prior AUPRC
+0.455, MMD 0.041). So the worker-RNG bug was **not** the cause of the full-scale Frangieh
+regression; something about the full-scale config (6000-ctx prior, ns=200, bs32/accum2, 10k
+micro-steps) genuinely transfers worse to melanoma than the 1000-ctx/ns100/bs64/accum1/4000
+recipe. **Open: ablate which knob (most likely accum=2, or ns=200-at-equal-steps undertraining,
+or the larger/more-diverse prior) before re-attempting Phase 2.** Ckpts on cluster
+`outputs/prior_v1noise_full_s42_{hl3m,hl3mv2}/model.ckpt`; logs `hl3mv2.log`, evals
+`{fr,pa}_v1noise_full_s42_hl3m{,v2}.json`.
