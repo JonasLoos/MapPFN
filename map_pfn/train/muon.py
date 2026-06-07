@@ -82,11 +82,14 @@ def muon_adamw(
                 scale = jnp.sqrt(jnp.maximum(1.0, g.shape[0] / g.shape[1]))
                 upd = scale * o
                 v_new = v
+                # Decoupled weight decay on 2-D weight matrices ONLY — never on biases or
+                # LayerNorm/RMSNorm scales (all 1-D, the `else` branch), per standard practice.
+                wd = weight_decay * p if (weight_decay != 0.0 and p is not None) else 0.0
             else:
                 m_new = adam_b1 * m + (1.0 - adam_b1) * g
                 v_new = adam_b2 * v + (1.0 - adam_b2) * (g * g)
                 upd = (m_new / b1c) / (jnp.sqrt(v_new / b2c) + eps)
-            wd = weight_decay * p if (weight_decay != 0.0 and p is not None) else 0.0
+                wd = 0.0
             return -lr * (upd + wd), m_new, v_new
 
         # params aligns 1:1 with grads (same eqx pytree); fall back to grads when the

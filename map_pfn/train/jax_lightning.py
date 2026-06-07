@@ -241,6 +241,8 @@ class JaxLightningModule(LightningModule):
                 b1=self.b1,
                 b2=self.b2,
                 weight_decay=self.weight_decay,
+                # Decay 2-D weight matrices only; never biases or LayerNorm/RMSNorm scales (1-D).
+                mask=lambda params: jax.tree.map(lambda x: jnp.ndim(x) >= 2, params),
             )
         # MultiSteps is a no-op at accum=1 and its mask handling is incompatible
         # with optax muon's internal masking, so only wrap when actually accumulating.
