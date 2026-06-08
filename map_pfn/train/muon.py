@@ -92,9 +92,21 @@ def muon_adamw(
                 wd = 0.0
             return -lr * (upd + wd), m_new, v_new
 
-        # params aligns 1:1 with grads (same eqx pytree); fall back to grads when the
-        # outer chain doesn't supply params (e.g. weight_decay=0 / standalone use).
-        p_tree = params if params is not None else grads
+        # Align params to the gradient pytree before mapping: eqx.filter_grad puts None at
+        # non-array leaves (e.g. the int `num_reg_tokens` field), but `params` (the full
+        # module optax threads in) holds real values there -> a None-vs-value tree-prefix
+        # mismatch ("Expected None, got 4"). Rebuild params with None wherever grads is None
+        # so grads/mu/nu/params share one structure. Fall back to grads when no params are
+        # supplied (weight_decay=0 / standalone use); the wd term is then unused.
+        if params is not None:
+            p_tree = jax.tree.map(
+                lambda g, p: None if g is None else p,
+                grads,
+                params,
+                is_leaf=lambda x: x is None,
+            )
+        else:
+            p_tree = grads
         out = jax.tree.map(per_leaf, grads, state.mu, state.nu, p_tree)
         is_tup = lambda x: isinstance(x, tuple)  # noqa: E731
         updates = jax.tree.map(lambda x: x[0], out, is_leaf=is_tup)
